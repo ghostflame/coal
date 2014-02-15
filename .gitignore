@@ -16,3 +16,12 @@
 *.exe
 *.out
 *.app
+
+# logs directory
+logs/
+
+# binary directory entries
+bin/*
+
+# nodes directory
+nodes/
