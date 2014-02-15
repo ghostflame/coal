@@ -33,6 +33,7 @@ fast:  CFLAGS += -O2
 fast:  $(BIN)
 
 $(BIN): $(OBJS)
+	@mkdir -p $(BINDIR)
 	$(CC) -o $(BINDIR)/$(BIN) $(LFLAGS) $(OBJS) $(LC3DIR)/libc3db.a
 	@echo "Built coal.  Go mining!"
 

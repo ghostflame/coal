@@ -5,6 +5,7 @@ INSDIR = /opt/coal
 SUBDIR = bin conf logs data
 
 all:
+	@mkdir -p bin logs
 	@-for d in $(DIRS); do ( cd $$d && $(MAKE) $(MFLAGS) $(TARGET) ); done
 
 debug: TARGET = debug
