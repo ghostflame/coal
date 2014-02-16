@@ -87,7 +87,7 @@ int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog )
 
 
 
-int net_write_host( HOST *h )
+int net_write_data( HOST *h )
 {
 	struct pollfd p;
 	int rv, b;

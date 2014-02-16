@@ -115,6 +115,8 @@ struct node_control
 
 	// incrementor
 	unsigned int		node_id;
+	unsigned int		leaves;
+	unsigned int		branches;
 
 	// retention policies
 	NODE_RET		*	policies;

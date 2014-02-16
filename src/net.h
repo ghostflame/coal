@@ -91,7 +91,7 @@ HOST *net_get_host( int sock, int type );
 int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog );
 
 // r/w
-int net_write_host( HOST *h );
+int net_write_data( HOST *h );
 int net_read_data( HOST *h );
 int net_read_lines( HOST *h );
 

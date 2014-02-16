@@ -85,6 +85,12 @@ NODE *node_create( char *name, int len, NODE *parent, PATH *p, int leaf )
 	for( pn = n; pn; pn = pn->parent )
 		pn->updated = at;
 
+	// and the counts
+	if( leaf )
+		++(ctl->node->leaves);
+	else
+		++(ctl->node->branches);
+
 	return n;
 }
 

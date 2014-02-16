@@ -16,6 +16,8 @@ struct sync_control
 };
 
 
+void sync_single_node( NODE *n );
+
 int sync_config_line( AVP *av );
 SYNC_CTL *sync_config_defaults( void );
 

@@ -10,7 +10,7 @@ BINDIR = ../bin
 LC3DIR = ../../libc3db/lib
 HC3DIR = ../../libc3db/include
 
-OBJS   = utils.o log.o thread.o config.o mem.o loop.o node.o net.o data.o query.o sync.o main.o
+OBJS   = utils.o log.o thread.o config.o mem.o loop.o node.o net.o data.o query.o json.o sync.o main.o
 HDRS   = coal.h utils.h thread.h log.h
 
 IFLAGS = -I. -I$(HC3DIR)

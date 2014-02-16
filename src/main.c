@@ -154,6 +154,9 @@ int main( int ac, char **av )
 
 	if( node_start_discovery( ) )
 		fatal( "Unable to begin looking for existing nodes." );
+	info( "Discovered %u branch and %u leaf nodes.",
+		ctl->node->branches, ctl->node->leaves,
+		( ctl->node->node_id == 1 ) ? "" : "s" );
 
 	get_time( );
 	info( "Coal started up in %.3fs.",

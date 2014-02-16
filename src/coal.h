@@ -35,6 +35,7 @@
 #include "loop.h"
 #include "data.h"
 #include "node.h"
+#include "json.h"
 #include "query.h"
 #include "sync.h"
 

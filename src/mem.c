@@ -94,6 +94,52 @@ POINT *mem_new_point( void )
 	return p;
 }
 
+POINT *mem_new_points( int count )
+{
+	POINT *list, *p;
+	int i, c;
+
+	pthread_mutex_lock( &(ctl->locks->point) );
+
+	if( ctl->mem->free_points > count )
+	{
+		// take just some
+		list = ctl->mem->points;
+		for( p = list, i = 1; i < count; i++ )
+			p = p->next;
+
+		ctl->mem->points = p->next;
+		p->next = NULL;
+
+		ctl->mem->free_points -= count;
+		pthread_mutex_unlock( &(ctl->locks->point) );
+	}
+	else
+	{
+		// take them all
+		list = ctl->mem->points;
+		c    = count - ctl->mem->free_points;
+
+		ctl->mem->free_points = 0;
+		ctl->mem->points      = NULL;
+		ctl->mem->mem_points += c;
+
+		pthread_mutex_unlock( &(ctl->locks->point) );
+
+		// and alloc the rest
+		for( i = c; i > 0; i-- )
+		{
+			p       = (POINT *) allocz( sizeof( POINT ) );
+			p->next = list;
+			list    = p;
+		}
+	}
+
+	return list;
+}
+
+
+
 void mem_free_point( POINT **p )
 {
 	POINT *sp;
@@ -225,7 +271,6 @@ void mem_free_path( PATH **p )
 	pthread_mutex_unlock( &(ctl->locks->path) );
 }
 
-
 void mem_free_path_list( PATH *list )
 {
 	PATH *p, *end = list;
@@ -251,6 +296,62 @@ void mem_free_path_list( PATH *list )
 
 	pthread_mutex_unlock( &(ctl->locks->path) );
 }
+
+
+QUERY *mem_new_query( void )
+{
+	QUERY *q;
+
+	pthread_mutex_lock( &(ctl->locks->query) );
+
+	if( ctl->mem->queries )
+	{
+		q = ctl->mem->queries;
+		ctl->mem->queries = q->next;
+		--(ctl->mem->free_queries);
+		pthread_mutex_unlock( &(ctl->locks->query) );
+
+		q->next = NULL;
+	}
+	else
+	{
+		++(ctl->mem->mem_queries);
+		pthread_mutex_unlock( &(ctl->locks->query) );
+
+		q = (QUERY *) allocz( sizeof( QUERY ) );
+	}
+
+	return q;
+}
+
+void mem_free_query( QUERY **q )
+{
+	QUERY *sq;
+
+	if( !q || !*q )
+		return;
+
+	sq = *q;
+	*q = NULL;
+
+	if( sq->res.count && sq->res.points )
+		free( sq->res.points );
+
+	if( sq->path )
+		mem_free_path( &(sq->path) );
+
+	memset( sq, 0, sizeof( QUERY ) );
+
+	pthread_mutex_lock( &(ctl->locks->query) );
+
+	sq->next = ctl->mem->queries;
+	ctl->mem->queries = sq;
+	++(ctl->mem->mem_queries);
+
+	pthread_mutex_unlock( &(ctl->locks->query) );
+}
+
+
 
 
 

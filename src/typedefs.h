@@ -18,6 +18,7 @@ typedef struct sync_control			SYNC_CTL;
 typedef struct config_context 		CCTXT;
 typedef struct data_point 			POINT;
 typedef struct log_file    			LOG_FILE;
+typedef struct query_data			QUERY;
 typedef struct host_data			HOST;
 typedef struct node_retain			NODE_RET;
 typedef struct node_data			NODE;
