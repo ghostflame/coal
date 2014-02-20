@@ -215,6 +215,8 @@ int get_config( char *path )
 			lrv = node_retain_line( &av );
 		else if( secIs( "sync" ) )
 			lrv = sync_config_line( &av );
+		else if( secIs( "stats" ) )
+			lrv = stats_config_line( &av );
 		else
 			lrv = config_line( &av );
 
@@ -255,6 +257,7 @@ COAL_CTL *create_config( void )
 	c->locks       = lock_config_defaults( );
 	c->mem         = mem_config_defaults( );
 	c->sync        = sync_config_defaults( );
+	c->stats       = stats_config_defaults( );
 
 	c->pidfile     = strdup( DEFAULT_PID_FILE );
 	c->basedir     = strdup( DEFAULT_BASE_DIR );

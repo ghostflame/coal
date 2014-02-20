@@ -191,7 +191,8 @@ int net_read_data( HOST *h )
 
 int net_read_lines( HOST *h )
 {
-	int i, keeplast = 0;
+	int i, keeplast = 0, l;
+	char *w;
 
 	// try to read some data
 	if( ( i = net_read_data( h ) ) <= 0 )
@@ -213,6 +214,27 @@ int net_read_lines( HOST *h )
 		debug( "Invalid buffer from data host %s.", h->name );
 		return -1;
 	}
+
+	// clean \r's
+	for( i = 0; i < h->all->wc; i++ )
+	{
+		w = h->all->wd[i];
+		l = h->all->len[i];
+
+		// might be at the start
+		if( *w == '\r' )
+		{
+			++(h->all->wd[i]);
+			--(h->all->len[i]);
+			--l;
+		}
+
+		// remove trailing carriage returns
+		if( *(w + l - 1) == '\r' )
+			h->all->wd[--(h->all->len[i])] = '\0';
+	}
+
+
 
 	// claw back the last line - it was incomplete
 	if( h->all->wc && keeplast )

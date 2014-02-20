@@ -1,15 +1,55 @@
 #include "coal.h"
 
 
+
+
+int json_send_children( HOST *h, QUERY *q )
+{
+	int i, hwmk;
+	NODE *n;
+
+	for( i = 0, n = q->node->children; n; n = n->next, i++ );
+
+	h->outlen = snprintf( h->outbuf, MAX_PKT_OUT,
+		"{\"path\":\"%s\",\"count\":%d,\"nodes\":[",
+		q->path->str, i );
+
+	net_write_data( h );
+
+	hwmk = MAX_PKT_OUT - 134;
+
+	for( i = 0, n = q->node->children; n; n = n->next, i++ )
+	{
+		h->outlen += snprintf( h->outbuf + h->outlen, 128, "%s[%s,%s]",
+			( i ) ? "," : "",
+			( n->flags & NODE_FLAG_LEAF ) ? "leaf" : "branch",
+			n->name );
+
+		if( h->outlen > hwmk )
+			net_write_data( h );
+	}
+
+	// add closing braces
+	h->outlen += snprintf( h->outbuf + h->outlen, 4, "]}\n" );
+	net_write_data( h );
+
+	return 0;
+}
+
+
+
 int json_send_result( HOST *h, QUERY *q )
 {
 	int start, hwmk;
 	uint32_t t;
 	C3PNT *p;
 
+	if( q->tree )
+		return json_send_children( h, q );
+
 	h->outlen = snprintf( h->outbuf, MAX_PKT_OUT,
-		"{\"from\":%ld,\"to\":%ld,\"count\":%d,\"period\":%d,\"metric\":\"%s\",\"values\":[",
-		q->start, q->end, q->res.count, q->res.period,
+		"{\"path\":\"%s\",\"start\":%ld,\"end\":%ld,\"count\":%d,\"period\":%d,\"metric\":\"%s\",\"values\":[",
+		q->path->str, q->start, q->end, q->res.count, q->res.period,
 		c3db_metric_name( q->rtype ) );
 
 	// write that

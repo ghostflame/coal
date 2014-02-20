@@ -92,6 +92,8 @@ int strwords( WORDS *w, char *src, int len, char sep )
 	if( !len )
 		len = strlen( src );
 
+	memset( w, 0, sizeof( WORDS ) );
+
 	w->wc = 0;
 
 	if( !len )

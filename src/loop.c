@@ -20,19 +20,19 @@ void loop_run( void )
 {
 	ctl->run_flags |= RUN_LOOP;
 
-	throw_thread( sync_loop, NULL );
-	throw_thread( push_loop, NULL );
+	thread_throw( sync_loop, NULL );
+	thread_throw( push_loop, NULL );
 
 	if( ctl->net->line->enabled )
 	{
-		throw_thread( data_loop,  ctl->net->line );		// data.c
-		throw_thread( query_loop, ctl->net->line );		// query.c
+		thread_throw( data_loop,  ctl->net->line );		// data.c
+		thread_throw( query_loop, ctl->net->line );		// query.c
 	}
 
 	if( ctl->net->bin->enabled )
 	{
-		throw_thread( data_loop,  ctl->net->bin );		// data.c
-		throw_thread( query_loop, ctl->net->bin );		// query.c
+		thread_throw( data_loop,  ctl->net->bin );		// data.c
+		thread_throw( query_loop, ctl->net->bin );		// query.c
 	}
 
 	while( ctl->run_flags & RUN_LOOP )

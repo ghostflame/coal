@@ -38,6 +38,7 @@
 #include "json.h"
 #include "query.h"
 #include "sync.h"
+#include "stats.h"
 
 // depends on almost everything
 #include "config.h"

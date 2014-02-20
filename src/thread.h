@@ -34,7 +34,7 @@ struct thread_data
 
 
 
-void throw_thread( void *(*fp) (void *), void *arg );
+void thread_throw( void *(*fp) (void *), void *arg );
 
 LOCK_CTL *lock_config_defaults( void );
 void lock_shutdown( void );

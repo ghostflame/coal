@@ -142,10 +142,15 @@ void data_add_path_cache( NODE *n, PATH *p )
 
 	hval = pc->sum % ctl->node->pcache_sz;
 
-	// no locking needed - all done by the node add thread
+	pthread_mutex_lock( &(ctl->locks->cache) );
+
 	pc->next = ctl->node->pcache[hval];
-	// the actual add is atomic, here
 	ctl->node->pcache[hval] = pc;
+
+	ndebug( "Node %u added to path cache at position %u",
+		n->id, hval );
+
+	pthread_mutex_unlock( &(ctl->locks->cache) );
 }
 
 
@@ -176,6 +181,8 @@ void queue_up_incoming( POINT *head, POINT *tail )
 
 	pthread_mutex_unlock( &(ctl->locks->data) );
 }
+
+
 
 void grab_incoming( POINT **list )
 {
@@ -243,6 +250,8 @@ POINT *data_line_fetch( HOST *h )
 				mem_free_point( &p );
 				continue;
 			}
+
+			++(h->points);
 
 			p->next = list;
 			list    = p;
@@ -420,7 +429,7 @@ void *data_loop( void *arg )
 		if( p.revents & POLL_EVENTS )
 		{
 			if( ( h = net_get_host( p.fd, ntc->type ) ) )
-				throw_thread( data_connection, h );
+				thread_throw( data_connection, h );
 		}
 	}
 

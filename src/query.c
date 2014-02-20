@@ -5,6 +5,14 @@ int find_cached_node( QUERY *q )
 	uint32_t sum, hval;
 	PCACHE *pc;
 
+	// . is the root node
+	if( q->path->len  == 1 &&
+	  *(q->path->str) == '.' )
+	{
+		q->node = ctl->node->nodes;
+		return 0;
+	}
+
 	sum  = data_path_cksum( q->path->str, q->path->len );
 	hval = sum % ctl->node->pcache_sz;
 
@@ -24,8 +32,8 @@ int find_cached_node( QUERY *q )
 
 int find_node( QUERY *q, NODE *parent )
 {
-	int len, leaf;
 	char *wd;
+	int len;
 	NODE *n;
 	PATH *p;
 
@@ -37,45 +45,79 @@ int find_node( QUERY *q, NODE *parent )
 	// or we are going down to the next string
 	p->curr++;
 
-	leaf = ( p->curr == p->w->wc ) ? 1 : 0;
-
 	for( n = parent->children; n; n = n->next )
 		if( n->name_len == len && !memcmp( n->name, wd, len ) )
 		{
 			if( n->flags & NODE_FLAG_ERROR )
 				return -1;
-			else if( leaf )
-			{
-				if( !( n->flags & NODE_FLAG_LEAF ) )
-				{
-					qwarn( "Trying to query a non-leaf node %s",
-						n->dir_path );
-					return -1;
-				}
 
-				q->node = n;
-				return 0;
-			}
-			else
+			// are we there yet?
+			if( p->curr < p->w->wc )
 				return find_node( q, n );
+
+			if( !q->tree && !( n->flags & NODE_FLAG_LEAF ) )
+			{
+				qwarn( "Trying to data query a branch node %s",
+					n->dir_path );
+				return -1;
+			}
+
+			q->node = n;
+			return 0;
 		}
 
 	return -1;
 }
 
 
+int query_send_children( HOST *h, QUERY *q )
+{
+	int i, hwmk;
+	NODE *n;
+
+	for( i = 0, n = q->node->children; n; n = n->next, i++ );
+
+	h->outlen = snprintf( h->outbuf, MAX_PKT_OUT,
+					"%s 1 0 0 tree 0 %d\n",
+					q->path->str, i );
+	net_write_data( h );
+
+	hwmk = MAX_PKT_OUT - 128;
+
+	for( n = q->node->children; n; n = n->next )
+	{
+		h->outlen += snprintf( h->outbuf + h->outlen, 128, "%s,%s\n",
+			( n->flags & NODE_FLAG_LEAF ) ? "leaf" : "branch", n->name );
+
+		if( h->outlen > hwmk )
+			net_write_data( h );
+	}
+
+	if( h->outlen )
+		net_write_data( h );
+
+	return 0;
+}
+
+
 
 int query_send_fields( HOST *h, QUERY *q )
 {
-	int j, max, hwmk;
+	int j, hwmk;
 	uint32_t t;
 	C3PNT *p;
 
+	// tree queries are different
+	if( q->tree )
+		return query_send_children( h, q );
+
+
 	h->outlen = snprintf( h->outbuf, MAX_PKT_OUT,
-					"%s %ld %ld %s %d\n",
+					"%s 0 %ld %ld %s %d %d\n",
 					q->path->str,
 					q->res.from, q->res.to,
 					c3db_metric_name( q->rtype ),
+					q->res.period,
 					q->res.count );
 
 	// send that header
@@ -83,7 +125,6 @@ int query_send_fields( HOST *h, QUERY *q )
 
 	p    = q->res.points;
 	hwmk = MAX_PKT_OUT - 66;
-	max  = q->res.count - 1;
 
 	// sync to the period boundaries
 	t = q->start - ( q->start % q->res.period );
@@ -91,30 +132,16 @@ int query_send_fields( HOST *h, QUERY *q )
 	for( j = 0; t < q->end; t += q->res.period, p++, j++ )
 	{
 		if( p->ts == t )
-			h->outlen += snprintf( h->outbuf + h->outlen, 64, "[%u,%6f]%s",
-							t, p->val, ( j < max ) ? "," : "" );
+			h->outlen += snprintf( h->outbuf + h->outlen, 64, "%u,%6f\n", t, p->val );
 		else
-			h->outlen += snprintf( h->outbuf + h->outlen, 64, "[%u,null]%s",
-							t, ( j < max ) ? "," : "" );
+			h->outlen += snprintf( h->outbuf + h->outlen, 64, "%u,null\n", t );
 
 		if( h->outlen > hwmk )
-		{
-			// add a newline
-			h->outbuf[h->outlen++] = '\n';
-			h->outbuf[h->outlen]   = '\0';
-
 			net_write_data( h );
-		}
 	}
 
 	if( h->outlen )
-	{
-		// add a newline
-		h->outbuf[h->outlen++] = '\n';
-		h->outbuf[h->outlen]   = '\0';
-
 		net_write_data( h );
-	}
 
 	return 0;
 }
@@ -171,45 +198,55 @@ int query_format_type( char *str )
 
 QUERY *query_read( HOST *h )
 {
+	int i, len, maxf;
 	QUERY *q, *list;
-	int i, len;
 	char *wd;
 
 	list = NULL;
 
-	while( net_read_data( h ) > 0 )
+	while( net_read_lines( h ) > 0 )
 		for( i = 0; i < h->all->wc; i++ )
 		{
 			wd  = h->all->wd[i];
 			len = h->all->len[i];
 
-			strwords( h->val, wd, len, FIELD_SEPARATOR );
+			qinfo( "Received query from host %s: (%d) %s",
+				h->name, len, wd );
 
-			// format is
-			// path from to [rtype [format]]
-			if( h->val->wc < QUERY_FIELD_METRIC )
+			// we have very variable requirements here
+			if( !( strwords( h->val, wd, len, FIELD_SEPARATOR ) > 0 ) )
 			{
-				qdebug( "Invalid line from query host %s", h->name );
+				qinfo( "Invalid line from query host %s", h->name );
 				continue;
 			}
 
-			q        = mem_new_query( );
-			q->path  = mem_new_path( h->val->wd[QUERY_FIELD_PATH],
-			                         h->val->len[QUERY_FIELD_PATH] );
-			q->start = (time_t) strtoul( h->val->wd[QUERY_FIELD_FROM], NULL, 10 );
-			q->end   = (time_t) strtoul( h->val->wd[QUERY_FIELD_TO],   NULL, 10 );
+			// create a new with some defaults
+			q         = mem_new_query( );
+			q->format = QUERY_FMT_FIELDS;
+			q->rtype  = C3DB_REQ_MEAN;
+			q->end    = (time_t) ctl->curr_time;
+			// is this a tree-only query?
+			q->tree   = 1;
 
-			// do we have a metric?
-			if( h->val->wc >= QUERY_FIELD_METRIC )
-				q->rtype = c3db_metric( h->val->wd[QUERY_FIELD_METRIC] );
-			else
-				q->rtype = C3DB_REQ_MEAN;
+			// this is only as it makes more sense as a 'max field'
+			maxf = h->val->wc - 1;
 
-			// do we have a format?
-			if( h->val->wc >= QUERY_FIELD_FORMAT )
-				q->format = query_format_type( h->val->wd[QUERY_FIELD_FORMAT] );
-			else
-				q->format = QUERY_FMT_FIELDS;
+			// fallthrough is intentional
+			switch( maxf )
+			{
+				case QUERY_FIELD_FORMAT:
+					q->format = query_format_type( h->val->wd[QUERY_FIELD_FORMAT] );
+				case QUERY_FIELD_METRIC:
+					q->rtype  = c3db_metric( h->val->wd[QUERY_FIELD_METRIC] );
+				case QUERY_FIELD_END:
+					q->end    = (time_t) strtoul( h->val->wd[QUERY_FIELD_END], NULL, 10 );
+				case QUERY_FIELD_START:
+					q->start  = (time_t) strtoul( h->val->wd[QUERY_FIELD_START], NULL, 10 );
+					q->tree   = 0;
+				default:
+					q->path   = mem_new_path( h->val->wd[QUERY_FIELD_PATH],
+					                          h->val->len[QUERY_FIELD_PATH] );
+			}
 
 			// did we get sensible strings?
 			if( q->rtype  == C3DB_REQ_INVLD
@@ -219,6 +256,8 @@ QUERY *query_read( HOST *h )
 				mem_free_query( &q );
 				continue;
 			}
+
+			qnotice( "Running query from host %s", h->name );
 
 			if( find_cached_node( q ) != 0 )
 			{
@@ -281,7 +320,9 @@ POINT *get_cached_points( NODE *n )
 
 
 
-int query_handle( QUERY *q )
+
+
+int query_data( QUERY *q )
 {
 	C3HDL *h;
 	NODE *n;
@@ -364,8 +405,16 @@ void *query_connection( void *arg )
 
 			qdebug( "Found a query to handle." );
 
-			if( query_handle( q ) == 0 )
+			if( q->tree )
+			{
+				// we've already found the node
 				query_send_result( h, q );
+			}
+			else
+			{
+				if( query_data( q ) == 0 )
+					query_send_result( h, q );
+			}
 		}
 
 		// error?
@@ -423,7 +472,7 @@ void *query_loop( void *arg )
 		if( p.revents & POLL_EVENTS )
 		{
 			if( ( h = net_get_host( p.fd, ntc->type ) ) )
-				throw_thread( query_connection, h );
+				thread_throw( query_connection, h );
 		}
 	}
 

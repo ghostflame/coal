@@ -24,35 +24,35 @@ NODE *node_create( char *name, int len, NODE *parent, PATH *p, int leaf )
 	double at;
 	int l;
 
-	n           = (NODE *) allocz( sizeof( NODE ) );
-	n->name     = str_dup( name, len );
-	n->name_len = len;
-	n->parent   = parent;
+	n            = (NODE *) allocz( sizeof( NODE ) );
+	n->id        = ctl->node->node_id++;
+	n->name      = str_dup( name, len );
+	n->name_len  = len;
+	n->dpath_len = len;
+	n->parent    = parent;
+
 	if( parent )
 	{
-		n->next = parent->children;
+		n->next          = parent->children;
 		parent->children = n;
+		n->dpath_len    += 1 + parent->dpath_len;
 	}
 
-	n->id = ctl->node->node_id++;
-
-	n->dpath_len = len;
+	// databases get the extension
 	if( leaf )
 		n->dpath_len += 1 + C3DB_FILE_EXTN_LEN;
-	if( parent )
-		n->dpath_len += 1 + parent->dpath_len;
 
+	// make a new string space for the dir path
 	n->dir_path  = perm_str( n->dpath_len + 1 );
+	l = 0;
+
+	// prepend the parent path if there is one
+	if( parent )
+		l = snprintf( n->dir_path, n->dpath_len + 1, "%s/", parent->dir_path );
 
 	if( leaf )
 	{
-		// must have a parent?
-		l = snprintf( n->dir_path, n->dpath_len + 1, "%s/%s", parent->dir_path, name );
-		// do we need to add a file extention?
-		if( len < ( 2 + C3DB_FILE_EXTN_LEN )
-		 || strcmp( name + len - 1 - C3DB_FILE_EXTN_LEN, "." C3DB_FILE_EXTN ) )
-			// we know there's room, we alloc'd it
-			strcpy( n->dir_path + l, "." C3DB_FILE_EXTN );
+		snprintf( n->dir_path + l, n->dpath_len + 1 - l, "%s.%s", name, C3DB_FILE_EXTN );
 
 		n->flags |= NODE_FLAG_LEAF;
 		ctl->node->count++;
@@ -65,20 +65,22 @@ NODE *node_create( char *name, int len, NODE *parent, PATH *p, int leaf )
 		else
 			ndebug( "Node '%s' uses policy %s", n->dir_path, n->policy->name );
 
+		// and create that
 		data_add_path_cache( n, p );
 
 		ninfo( "New leaf node %u '%s', child of node %u",
 			n->id, n->dir_path, parent->id );
 	}
-	else if( parent )
-	{
-	 	snprintf( n->dir_path, n->dpath_len + 1, "%s/%s", parent->dir_path, name );
-		ninfo( "New branch node %u '%s', child of node %u",
-			n->id, n->dir_path, parent->id );
-	}
 	else
-		// just the root node, ideally
-		snprintf( n->dir_path, n->dpath_len + 1, "%s", name );
+	{
+	 	snprintf( n->dir_path + l, n->dpath_len + 1 - l, "%s", name );
+
+		if( parent )
+			ninfo( "New branch node %u '%s', child of node %u",
+				n->id, n->dir_path, parent->id );
+		else
+			ninfo( "Created root node '%s'", n->dir_path );
+	}
 
 	// update the timestamps
 	at = ctl->curr_time;
@@ -131,7 +133,36 @@ int create_database( NODE *n )
 
 	c3db_close( h );
 
+	node_lock( n );
 	n->flags |= NODE_FLAG_CREATED;
+	node_unlock( n );
+
+	return 0;
+}
+
+
+
+int check_database( NODE *n )
+{
+	C3HDL *h;
+
+	h = c3db_open( n->dir_path, C3DB_RO );
+
+	if( c3db_status( h ) != C3E_SUCCESS )
+	{
+		nerr( "Could not open database '%s' -- %s",
+			n->dir_path, c3db_error( h ) );
+		n->flags |= NODE_FLAG_ERROR;
+		c3db_close( h );
+		return -1;
+	}
+
+	c3db_close( h );
+
+	node_lock( n );
+	n->flags |= NODE_FLAG_CREATED;
+	node_unlock( n );
+
 	return 0;
 }
 
@@ -148,7 +179,10 @@ int create_directory( NODE *n )
 		return -1;
 	}
 
+	node_lock( n );
 	n->flags |= NODE_FLAG_CREATED;
+	node_unlock( n );
+
 	return 0;
 }
 
@@ -201,7 +235,7 @@ int node_path_check( NODE *n, int leaf, struct stat *sb )
 
 
 
-int node_create_single( NODE *n )
+int node_write_single( NODE *n )
 {
 	struct stat sb;
 	int leaf, ret;
@@ -254,7 +288,7 @@ int node_create_single( NODE *n )
 
 
 
-void create_node( NODE *n )
+void node_write( NODE *n )
 {
 	NODE *ch;
 
@@ -267,11 +301,11 @@ void create_node( NODE *n )
 
 	// is this one done?
 	if( !( n->flags & NODE_FLAG_CREATED ) )
-		node_create_single( n );
+		node_write_single( n );
 
 	// move on
 	for( ch = n->children; ch; ch = ch->next )
-		create_node( ch );
+		node_write( ch );
 }
 
 
@@ -279,7 +313,7 @@ void *node_maker( void *arg )
 {
 	THRD *t = (THRD *) arg;
 
-	create_node( ctl->node->nodes );
+	node_write( ctl->node->nodes );
 
 	free( t );
 	return NULL;
@@ -289,9 +323,8 @@ void *node_maker( void *arg )
 
 int node_read_dir( NODE *dn, regex_t *c3chk )
 {
+	int leaf, ret, len;
 	struct dirent *d;
-	int l, leaf, ret;
-	struct stat sb;
 	char buf[2048];
 	PATH path;
 	NODE *n;
@@ -304,9 +337,9 @@ int node_read_dir( NODE *dn, regex_t *c3chk )
 		return -1;
 	}
 
-	l = snprintf( buf, 2048, "%s/", dn->dir_path );
 	memset( &path, 0, sizeof( PATH ) );
 	path.str = buf;
+	path.len = snprintf( buf, 2048, "%s/", dn->dir_path );
 	ret = 0;
 
 	while( ( d = readdir( dh ) ) )
@@ -315,36 +348,36 @@ int node_read_dir( NODE *dn, regex_t *c3chk )
 		if( d->d_name[0] == '.' )
 			continue;
 
-		path.len = snprintf( buf + l, 2048 - l, "%s", d->d_name );
+		// tie ourselves to linux dirent.d_type for now
 
-		if( stat( buf, &sb ) )
+		switch( d->d_type )
 		{
-			warn( "Unable to stat dentry '%s' -- %s",
-				buf, Err );
-			continue;
-		}
+			case DT_DIR:
+				len  = strlen( d->d_name );
+				leaf = 0;
+				break;
 
-		if( S_ISDIR( sb.st_mode ) )
-		{
-			leaf = 0;
-		}
-		else if( S_ISREG( sb.st_mode ) )
-		{
-			// ignore things that aren't our c3db files
-			if( regexec( c3chk, buf, 0, NULL, 0 ) )
+			case DT_REG:
+				// we only care about c3db files here
+				if( regexec( c3chk, d->d_name, 0, NULL, 0 ) )
+					continue;
+
+				// adjust the length - we don't want .c3db in the node name
+				len  = strlen( d->d_name ) - 1 - C3DB_FILE_EXTN_LEN;
+				leaf = 1;
+
+				// stamp on the . in the name
+				d->d_name[len] = '\0';
+				break;
+
+			default:
+				// never mind other types
 				continue;
-			leaf = 1;
 		}
-		else
-			// never mind other things
-			continue;
 
-		// create a new node
-		n = node_create( d->d_name, strlen( d->d_name ),
-				dn, &path, leaf );
-
-		// and check it exists properly
-		node_path_check( n, leaf, &sb );
+		// set up the path and make a node
+		path.len += snprintf( buf + path.len, 2048 - path.len, "%s", d->d_name );
+		n = node_create( d->d_name, len, dn, &path, leaf );
 
 		// recurse in on directories
 		if( !leaf )
@@ -374,7 +407,7 @@ int node_start_discovery( void )
 	ctl->node->nodes = node_create( ctl->node->root, ctl->node->root_len,
 			NULL, NULL, 0 );
 	// and make it, right now
-	create_node( ctl->node->nodes );
+	node_write( ctl->node->nodes );
 
 	snprintf( buf, 16, "\\.%s$", C3DB_FILE_EXTN );
 	if( ( rv = regcomp( &c3r, buf, REG_NOSUB ) ) )

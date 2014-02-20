@@ -104,13 +104,13 @@ void *sync_loop( void *arg )
 		if( ctl->curr_time > syncTick )
 		{
 			syncTick += ctl->sync->sync_sec;
-			throw_thread( sync_all_nodes, NULL );
+			thread_throw( sync_all_nodes, NULL );
 		}
 
 		if( ctl->curr_time > makeTick )
 		{
 			makeTick += ctl->sync->make_sec;
-			throw_thread( node_maker, NULL );
+			thread_throw( node_maker, NULL );
 		}
 
 		usleep( 100000 );

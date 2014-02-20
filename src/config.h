@@ -21,6 +21,7 @@ struct coal_control
 	MEM_CTL			*	mem;
 	LOCK_CTL		*	locks;
 	SYNC_CTL		*	sync;
+	STAT_CTL		*	stats;
 
 	// where as-yet-unclassified data goes
 	POINT			*	data_in;

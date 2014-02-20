@@ -2,7 +2,7 @@
 
 pthread_attr_t *tt_attr = NULL;
 
-void throw_thread_init_attr( void )
+void thread_throw_init_attr( void )
 {
 	tt_attr = (pthread_attr_t *) allocz( sizeof( pthread_attr_t ) );
 	pthread_attr_init( tt_attr );
@@ -12,12 +12,12 @@ void throw_thread_init_attr( void )
 }
 
 
-void throw_thread( void *(*fp) (void *), void *arg )
+void thread_throw( void *(*fp) (void *), void *arg )
 {
 	THRD *t;
 
 	if( !tt_attr )
-		throw_thread_init_attr( );
+		thread_throw_init_attr( );
 
 	t = (THRD *) allocz( sizeof( THRD ) );
 	t->arg = arg;

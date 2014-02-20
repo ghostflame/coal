@@ -1,0 +1,32 @@
+#!/bin/bash
+
+paths=($(< paths))
+count=1
+pct=20000
+
+while getopts "c:p:" o; do
+	case $o in
+		c)
+			count=$OPTARG
+			;;
+		p)
+			pct=$OPTARG
+			;;
+	esac
+done
+
+if [ $count -gt ${#paths[*]} ]; then
+	count=${#paths[*]}
+fi
+
+i=0
+while [ $i -lt $count ]; do
+	echo "Path: ${paths[$i]}   Count: $pct"
+	./submit_test_data.sh -p ${paths[$i]} -c $pct >/dev/null 2>&1 &
+	((i++))
+done
+
+SECONDS=$(date +%s)
+
+echo "${paths[0]} $(($SECONDS - 30)) $SECONDS max json" | nc 127.0.0.1 3802
+

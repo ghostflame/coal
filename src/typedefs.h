@@ -13,6 +13,7 @@ typedef struct memory_control 		MEM_CTL;
 typedef struct node_control			NODE_CTL;
 typedef struct lock_control			LOCK_CTL;
 typedef struct sync_control			SYNC_CTL;
+typedef struct stat_control			STAT_CTL;
 
 // other structures
 typedef struct config_context 		CCTXT;
@@ -27,6 +28,13 @@ typedef struct path_data			PATH;
 typedef struct thread_data			THRD;
 typedef struct words_data			WORDS;
 typedef struct av_pair				AVP;
+
+// stats structures
+typedef struct data_stats_data		DSTATS;
+typedef struct query_stats_data		QSTATS;
+typedef struct net_type_stats		NTSTATS;
+typedef struct stats_data			STATS;
+
 
 // and function types
 typedef void * throw_fn ( void * );

@@ -1,0 +1,82 @@
+Query Format
+============
+
+Queries can have up to 5 fields
+
+Order  Field       Type        Default
+1      Path        String      None - required
+2      Start       Timestamp   None - presence denotes a data query, absence a tree query
+3      End         Timestamp   Current time
+4      Metric      String      mean - taken from [ mean, min, max, count, sum, spread ]
+5      Format      String      fields - taken from [ fields, json ]
+
+
+
+In line format, these are presented separated by a space ' ' and terminated
+by a newline '\n'.  The field count is noted and decisions made on the query
+based on it.
+
+Tree queries - to explore the tree - expect only a single field, the path.
+This will result in a list of the child node names, and whether they are leaves
+or branches.
+
+Further fields result in a data query, which returns nothing for a branch.
+
+
+Return Formats
+==============
+
+
+Line format:
+
+The return of a data query is:
+
+<path> <from> <to> <metric> <period> <result count>\n
+[<timestamp>,<value>|"null"]\n
+[<timestamp>,<value>|"null"]\n
+...
+
+Until all results are sent.
+
+The return of a tree query is:
+
+<path> 0 0 "tree" 0 <result count>\n
+"leaf"|"branch",<path>\n
+"leaf"|"branch",<path>\n
+...
+
+Until all results are sent.
+
+
+Json format:
+
+The return of a data query is:
+{
+	"path":     <path>,
+	"start":    <start>,
+	"end":      <end>,
+	"metric":   <metric>,
+	"period":   <period>,
+	"count":    <result count>,
+    "values":	[
+		[<timestamp>,<value>|"null"],
+		[<timestamp>,<value>|"null"],
+		...
+	]
+}
+
+
+There return of a tree query is:
+
+{
+	"path":     <path>,
+	"count":    <result count>,
+	"nodes":    [
+		["leaf"|"branch",<name>],
+		["leaf"|"branch",<name>],
+		...
+	]
+}
+
+
+

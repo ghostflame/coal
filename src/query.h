@@ -5,8 +5,8 @@
 enum query_line_fields
 {
 	QUERY_FIELD_PATH = 0,
-	QUERY_FIELD_FROM,
-	QUERY_FIELD_TO,
+	QUERY_FIELD_START,
+	QUERY_FIELD_END,
 	QUERY_FIELD_METRIC,
 	QUERY_FIELD_FORMAT,
 	QUERY_FIELD_COUNT
@@ -31,6 +31,7 @@ struct query_data
 	time_t				end;
 	int					rtype;
 	int					format;
+	int					tree;
 
 	C3RES				res;
 };
