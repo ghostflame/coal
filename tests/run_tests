@@ -3,14 +3,18 @@
 paths=($(< paths))
 count=1
 pct=20000
+met="max"
 
-while getopts "c:p:" o; do
+while getopts "c:p:m:" o; do
 	case $o in
 		c)
 			count=$OPTARG
 			;;
 		p)
 			pct=$OPTARG
+			;;
+		m)
+			met=$OPTARG
 			;;
 	esac
 done
@@ -28,5 +32,9 @@ done
 
 SECONDS=$(date +%s)
 
-echo "${paths[0]} $(($SECONDS - 30)) $SECONDS max json" | nc 127.0.0.1 3802
+echo -n "Waiting for sync... "
+sleep 30
+echo "done."
+
+echo "${paths[0]} $(($SECONDS - 50)) $SECONDS $met json" | nc 127.0.0.1 3802
 

@@ -128,8 +128,13 @@ struct node_control
 
 
 // node locking is based on id to spread the locks out
-#define node_lock( _n )		pthread_mutex_lock(   &(ctl->locks->node[(_n)->id % NODE_MUTEX_MASK]) )
-#define node_unlock( _n )	pthread_mutex_unlock( &(ctl->locks->node[(_n)->id % NODE_MUTEX_MASK]) )
+#define node_lock( _n )			pthread_mutex_lock(   &(ctl->locks->node[(_n)->id % NODE_MUTEX_MASK]) )
+#define node_unlock( _n )		pthread_mutex_unlock( &(ctl->locks->node[(_n)->id % NODE_MUTEX_MASK]) )
+
+
+
+#define node_add_flag( _n, _f )	node_lock( _n ); n->flags |=  _f; node_unlock( _n )
+#define node_rmv_flag( _n, _f )	node_lock( _n ); n->flags &= ~_f; node_unlock( _n )
 
 
 

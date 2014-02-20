@@ -133,9 +133,7 @@ int create_database( NODE *n )
 
 	c3db_close( h );
 
-	node_lock( n );
-	n->flags |= NODE_FLAG_CREATED;
-	node_unlock( n );
+	node_add_flag( n, NODE_FLAG_CREATED );
 
 	return 0;
 }
@@ -159,9 +157,7 @@ int check_database( NODE *n )
 
 	c3db_close( h );
 
-	node_lock( n );
-	n->flags |= NODE_FLAG_CREATED;
-	node_unlock( n );
+	node_add_flag( n, NODE_FLAG_CREATED );
 
 	return 0;
 }
@@ -179,9 +175,7 @@ int create_directory( NODE *n )
 		return -1;
 	}
 
-	node_lock( n );
-	n->flags |= NODE_FLAG_CREATED;
-	node_unlock( n );
+	node_add_flag( n, NODE_FLAG_CREATED );
 
 	return 0;
 }
@@ -203,7 +197,7 @@ int node_path_check( NODE *n, int leaf, struct stat *sb )
 		}
 
 		ninfo( "Found directory %s", n->dir_path );
-		n->flags |= NODE_FLAG_CREATED;
+		node_add_flag( n, NODE_FLAG_CREATED );
 		return 0;
 	}
 
@@ -216,7 +210,7 @@ int node_path_check( NODE *n, int leaf, struct stat *sb )
 		return -1;
 	}
 
-	n->flags |= NODE_FLAG_CREATED;
+	node_add_flag( n, NODE_FLAG_CREATED );
 
 	h = c3db_open( n->dir_path, C3DB_RO );
 	if( c3db_status( h ) != 0 )
@@ -282,7 +276,7 @@ int node_write_single( NODE *n )
 		}
 	}
 
-	n->flags &= ~NODE_FLAG_CREATING;
+	node_rmv_flag( n, NODE_FLAG_CREATING );
 	return ret;
 }
 
