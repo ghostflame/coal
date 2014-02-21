@@ -11,8 +11,10 @@ int json_send_children( HOST *h, QUERY *q )
 	for( i = 0, n = q->node->children; n; n = n->next, i++ );
 
 	h->outlen = snprintf( h->outbuf, MAX_PKT_OUT,
-		"{\"path\":\"%s\",\"count\":%d,\"nodes\":[",
-		q->path->str, i );
+		"{\"path\":\"%s\",\"type\":\"%s\",\"count\":%d,\"nodes\":[",
+		q->path->str,
+		node_leaf_str( q->node ),
+		i );
 
 	net_write_data( h );
 

@@ -31,7 +31,7 @@ Line format:
 
 The return of a data query is:
 
-<path> <from> <to> <metric> <period> <result count>\n
+<path> <from> <to> <metric> <period> <type> <result count>\n
 [<timestamp>,<value>|"null"]\n
 [<timestamp>,<value>|"null"]\n
 ...
@@ -40,12 +40,16 @@ Until all results are sent.
 
 The return of a tree query is:
 
-<path> 0 0 "tree" 0 <result count>\n
+<path> 0 0 "tree" 0 <type> <result count>\n
 "leaf"|"branch",<path>\n
 "leaf"|"branch",<path>\n
 ...
 
 Until all results are sent.
+
+In both the above, type is 0 (branch) or 1 (leaf), referring to the requested
+node.
+
 
 
 Json format:
@@ -70,6 +74,7 @@ There return of a tree query is:
 
 {
 	"path":     <path>,
+	"type":		["leaf"|"branch"],
 	"count":    <result count>,
 	"nodes":    [
 		["leaf"|"branch",<name>],

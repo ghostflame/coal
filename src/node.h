@@ -137,6 +137,10 @@ struct node_control
 #define node_rmv_flag( _n, _f )	node_lock( _n ); n->flags &= ~_f; node_unlock( _n )
 
 
+#define node_leaf_int( _n )		( ( _n->flags & NODE_FLAG_LEAF ) ? 1 : 0 )
+#define node_leaf_str( _n )		( ( _n->flags & NODE_FLAG_LEAF ) ? "leaf" : "branch" )
+
+
 
 NODE *node_create( char *name, int len, NODE *parent, PATH *p, int leaf );
 

@@ -78,8 +78,10 @@ int query_send_children( HOST *h, QUERY *q )
 	for( i = 0, n = q->node->children; n; n = n->next, i++ );
 
 	h->outlen = snprintf( h->outbuf, MAX_PKT_OUT,
-					"%s 1 0 0 tree 0 %d\n",
-					q->path->str, i );
+					"%s 1 0 0 tree 0 %d %d\n",
+					q->path->str,
+					node_leaf_int( q->node ),
+					i );
 	net_write_data( h );
 
 	hwmk = MAX_PKT_OUT - 128;
@@ -113,11 +115,12 @@ int query_send_fields( HOST *h, QUERY *q )
 
 
 	h->outlen = snprintf( h->outbuf, MAX_PKT_OUT,
-					"%s 0 %ld %ld %s %d %d\n",
+					"%s 0 %ld %ld %s %d %d %d\n",
 					q->path->str,
 					q->res.from, q->res.to,
 					c3db_metric_name( q->rtype ),
 					q->res.period,
+					node_leaf_int( q->node ),
 					q->res.count );
 
 	// send that header
@@ -198,8 +201,8 @@ int query_format_type( char *str )
 
 QUERY *query_read( HOST *h )
 {
-	int i, len, maxf;
 	QUERY *q, *list;
+	int i, len;
 	char *wd;
 
 	list = NULL;
@@ -210,11 +213,11 @@ QUERY *query_read( HOST *h )
 			wd  = h->all->wd[i];
 			len = h->all->len[i];
 
-			qinfo( "Received query from host %s: (%d) %s",
+			qdebug( "Received query from host %s: (%d) %s",
 				h->name, len, wd );
 
 			// we have very variable requirements here
-			if( !( strwords( h->val, wd, len, FIELD_SEPARATOR ) > 0 ) )
+			if( strwords( h->val, wd, len, FIELD_SEPARATOR ) < QUERY_FIELD_COUNT )
 			{
 				qinfo( "Invalid line from query host %s", h->name );
 				continue;
@@ -222,42 +225,48 @@ QUERY *query_read( HOST *h )
 
 			// create a new with some defaults
 			q         = mem_new_query( );
-			q->format = QUERY_FMT_FIELDS;
-			q->rtype  = C3DB_REQ_MEAN;
-			q->end    = (time_t) ctl->curr_time;
-			// is this a tree-only query?
-			q->tree   = 1;
+			q->path   = mem_new_path( h->val->wd[QUERY_FIELD_PATH],
+			                          h->val->len[QUERY_FIELD_PATH] );
+			q->format = query_format_type( h->val->wd[QUERY_FIELD_FORMAT] );
+			q->end    = (time_t) strtoul( h->val->wd[QUERY_FIELD_END], NULL, 10 );
+			q->start  = (time_t) strtoul( h->val->wd[QUERY_FIELD_START], NULL, 10 );
 
-			// this is only as it makes more sense as a 'max field'
-			maxf = h->val->wc - 1;
-
-			// fallthrough is intentional
-			switch( maxf )
+			// we can get metric 'tree'
+			if( !strcmp( h->val->wd[QUERY_FIELD_METRIC], "tree" ) )
 			{
-				case QUERY_FIELD_FORMAT:
-					q->format = query_format_type( h->val->wd[QUERY_FIELD_FORMAT] );
-				case QUERY_FIELD_METRIC:
-					q->rtype  = c3db_metric( h->val->wd[QUERY_FIELD_METRIC] );
-				case QUERY_FIELD_END:
-					q->end    = (time_t) strtoul( h->val->wd[QUERY_FIELD_END], NULL, 10 );
-				case QUERY_FIELD_START:
-					q->start  = (time_t) strtoul( h->val->wd[QUERY_FIELD_START], NULL, 10 );
-					q->tree   = 0;
-				default:
-					q->path   = mem_new_path( h->val->wd[QUERY_FIELD_PATH],
-					                          h->val->len[QUERY_FIELD_PATH] );
+				q->tree  = 1;
+				q->rtype = C3DB_REQ_INVLD;
+			}
+			else
+			{
+				q->rtype = c3db_metric( h->val->wd[QUERY_FIELD_METRIC] );
+
+				// do some checks on the timestamps
+				if( !q->start ) {
+					// you don't really mean all time
+					// an informal way of saying '24hrs please'
+					q->start = (time_t) ( ctl->curr_time - 86400.0 );
+				}
+
+				if( q->end == 0 ) {
+					// an informal way of saying 'now'
+					q->end = (time_t) ctl->curr_time;
+				} else if( q->end < q->start ) {
+					qwarn( "Start < end in query from host %s", h->name );
+					mem_free_query( &q );
+					continue;
+				}
 			}
 
+
 			// did we get sensible strings?
-			if( q->rtype  == C3DB_REQ_INVLD
+			if( ( !q->tree && q->rtype == C3DB_REQ_INVLD )
 			 || q->format == QUERY_FMT_INVALID )
 			{
 				qwarn( "Invalid type or format from host %s", h->name );
 				mem_free_query( &q );
 				continue;
 			}
-
-			qnotice( "Running query from host %s", h->name );
 
 			if( find_cached_node( q ) != 0 )
 			{
