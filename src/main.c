@@ -2,7 +2,20 @@
 
 void usage( void )
 {
-	printf( "Coal help coming...\n" );
+	char *help_str = "\
+Usage\tcoal -h\n\
+\tcoal [OPTIONS] -c <config file>\n\n\
+Options:\n\
+ -h             Print this help\n\
+ -c <file>      Select config file to use\n\
+ -d             Daemonize into the background\n\
+ -D             Switch on debug output (overrides config)\n\
+ -t             Just test the config is valid and exit\n\n\
+Coal is a graphite-alternative data storage engine.  It runs on very\n\
+similar lines, taking data points against dot-delimited paths and\n\
+storing it against timestamps.  See the documentation for the details.\n\n";
+
+	printf( "%s", help_str );
 	exit( 0 );
 }
 
@@ -119,6 +132,11 @@ int main( int ac, char **av )
 	if( chdir( ctl->basedir ) )
 		fatal( "Unable to chdir to base dir '%s' -- %s",
 			ctl->basedir, Err );
+
+	// match up relay rules against destinations
+	if( config_check_relay( ) ) {
+		fatal( "Unable to validate relay config." );
+	}
 
 	// were we just testing config?
 	if( testConf )

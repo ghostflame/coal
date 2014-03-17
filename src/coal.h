@@ -8,6 +8,7 @@
 
 // here's what we need in addition
 #include <poll.h>
+#include <netdb.h>
 #include <regex.h>
 #include <dirent.h>
 #include <signal.h>
@@ -39,6 +40,7 @@
 #include "query.h"
 #include "sync.h"
 #include "stats.h"
+#include "relay.h"
 
 // depends on almost everything
 #include "config.h"

@@ -1,12 +1,12 @@
 #include "coal.h"
 
 
-NODE_RET *node_policy( char *str )
+NODE_ROUTE *node_policy( char *str )
 {
-	NODE_RET *nr;
+	NODE_ROUTE *nr;
 	int i;
 
-	// cycle through the retention blocks
+	// cycle through the routing blocks
 	for( nr = ctl->node->policies; nr; nr = nr->next )
 		for( i = 0; i < nr->pat_count; i++ )
 			if( !regexec( nr->rgx[i], str, 0, NULL, 0 ) )
@@ -66,7 +66,7 @@ NODE *node_create( char *name, int len, NODE *parent, PATH *p, int leaf )
 			ndebug( "Node '%s' uses policy %s", n->dir_path, n->policy->name );
 
 		// and create that
-		data_add_path_cache( n, p );
+		data_add_path_cache( p, n, NULL );
 
 		ninfo( "New leaf node %u '%s', child of node %u",
 			n->id, n->dir_path, parent->id );
@@ -463,16 +463,16 @@ int node_config_line( AVP *av )
 
 
 
-static NODE_RET *nr_cfg_curr = NULL;
+static NODE_ROUTE *nr_cfg_curr = NULL;
 static int nr_cfg_count = 0;
 
-int node_retain_line( AVP *av )
+int node_routing_line( AVP *av )
 {
-  	NODE_RET *r;
+  	NODE_ROUTE *r;
 
 	if( !nr_cfg_curr )
 	{
-		nr_cfg_curr = (NODE_RET *) allocz( sizeof( NODE_RET ) );
+		nr_cfg_curr = (NODE_ROUTE *) allocz( sizeof( NODE_ROUTE ) );
 		nr_cfg_curr->id = nr_cfg_count++;
 	}
 
@@ -482,21 +482,21 @@ int node_retain_line( AVP *av )
 	{
 		if( r->name )
 		{
-			warn( "Node retention group '%s' also contains name '%s' - is a 'done' missing?",
+			warn( "Node routing group '%s' also contains name '%s' - is a 'done' missing?",
 				r->name, av->val );
 			return -1;
 		}
 
 		r->name = str_dup( av->val, av->vlen );
 
-		debug( "Retention policy %s config started.", r->name );
+		debug( "Routing policy %s config started.", r->name );
 	}
 	else if( attIs( "pattern" ) )
 	{
-		if( r->pat_count == NODE_RET_MAX_PATTERNS )
+		if( r->pat_count == NODE_ROUTE_MAX_PATTERNS )
 		{
-			warn( "Node retention group '%s' already has the max %d regex patterns.",
-				r->name, NODE_RET_MAX_PATTERNS );
+			warn( "Node routing group '%s' already has the max %d regex patterns.",
+				r->name, NODE_ROUTE_MAX_PATTERNS );
 			return -1;
 		}
 
@@ -513,7 +513,7 @@ int node_retain_line( AVP *av )
 			return -1;
 		}
 
-		debug( "Retention policy %s gains regex %s",
+		debug( "Routing policy %s gains regex %s",
 			( r->name ) ? r->name : "as yet unnamed", av->val );
 
 		// and note that we have another one
@@ -523,32 +523,60 @@ int node_retain_line( AVP *av )
 	{
 		if( r->retain )
 		{
-			warn( "Node retention group '%s' also contains retention '%s' - is a 'done' missing?",
-				r->name, av->val );
+			warn( "Node routing group '%s' also contains retention '%s' - is a 'done' missing?",
+				r->name, r->retain );
+			return -1;
+		}
+
+		if( r->relay )
+		{
+			warn( "Node routing group '%s' also contains relay '%s' - cannot retain AND relay!",
+				r->name, r->relay );
 			return -1;
 		}
 
 		// TODO
-		// sanity checking on retention strings
+		// sanity checking on retain strings
 
 		r->retain  = str_dup( av->val, av->vlen );
 		r->ret_len = av->vlen;
 
-		debug( "Retention policy %s has retains: %s",
+		debug( "Routing policy %s has retain: %s",
 			( r->name ) ? r->name : "as yet unnamed", r->retain );
+	}
+	else if( attIs( "relay" ) )
+	{
+		if( r->relay )
+		{
+			warn( "Node routing group '%s' also contains relay '%s' - is a 'done' missing?",
+				r->name, r->relay );
+			return -1;
+		}
+
+		if( r->retain )
+		{
+			warn( "Node routing group '%s' also contains retention '%s' - cannot retain AND relay!",
+				r->name, r->relay );
+			return -1;
+		}
+
+		r->relay   = str_dup( av->val, av->vlen );
+		r->rel_len = av->vlen;
+
+		debug( "Routing policy %s has relay: %s",
+			( r->name ) ? r->name : "as yet unnamed", r->relay );
 	}
 	else if( attIs( "done" ) )
 	{
 		if( !r->name )
 		{
-			warn( "Cannot process unnamed node data retention block." );
+			warn( "Cannot process unnamed node data routing block." );
 			return -1;
 		}
 
-		if( !r->retain
-		 || !r->pat_count )
+		if( ( !r->retain && !r->relay ) || !r->pat_count )
 		{
-			warn( "Incomplete node data retention block '%s'", r->name );
+			warn( "Incomplete node data routing block '%s'", r->name );
 			return -1;
 		}
 
@@ -556,7 +584,7 @@ int node_retain_line( AVP *av )
 		r->next = ctl->node->policies;
 		ctl->node->policies = r;
 
-		debug( "Retention policy %s created.", r->name );
+		debug( "Routing policy %s created.", r->name );
 
 		// and stamp on our static
 		nr_cfg_curr = NULL;
@@ -567,9 +595,9 @@ int node_retain_line( AVP *av )
 
 
 // they are backwards
-void node_sort_retentions( void )
+void node_sort_routings( void )
 {
-	NODE_RET *list, *nr, *nr_next;
+	NODE_ROUTE *list, *nr, *nr_next;
 
 	for( list = NULL, nr = ctl->node->policies; nr; nr = nr_next )
 	{

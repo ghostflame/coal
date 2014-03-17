@@ -1,0 +1,8 @@
+Relaying
+========
+
+Coal can act as a relay to other instances of coal, easily done by declaring
+the routing config to point to a relay destination rather than a file retention.
+
+Note, coal cannot relay to itself.
+

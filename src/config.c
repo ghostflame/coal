@@ -46,7 +46,7 @@ int config_get_line( FILE *f, AVP *av )
 			}
 
 			// grab that
-			memcpy( context->section, __cfg_read_line + 1, e - __cfg_read_line - 1 );
+			snprintf( context->section, 512, "%s", __cfg_read_line + 1 );
 
 			// spotted a section
 			return 1;
@@ -211,10 +211,12 @@ int get_config( char *path )
 		  	lrv = net_config_line( &av );
 		else if( secIs( "node" ) )
 			lrv = node_config_line( &av );
-		else if( secIs( "retention" ) )
-			lrv = node_retain_line( &av );
+		else if( secIs( "routing" ) )
+			lrv = node_routing_line( &av );
 		else if( secIs( "sync" ) )
 			lrv = sync_config_line( &av );
+		else if( secIs( "relay" ) )
+		 	lrv = relay_config_line( &av );
 		else if( secIs( "stats" ) )
 			lrv = stats_config_line( &av );
 		else
@@ -244,6 +246,42 @@ END_FILE:
 #undef secIs
 
 
+// confirm that all relay rules match up to existing
+// relay destinations
+int config_check_relay( void )
+{
+	NODE_ROUTE *n;
+	RDEST *d;
+
+	for( n = ctl->node->policies; n; n = n->next )
+	{
+		// if we're not relaying, don't worry
+		if( !n->relay )
+			continue;
+
+		for( d = ctl->relay->dests; d; d = d->next )
+			if( !strcasecmp( n->relay, d->name ) )
+			{
+				n->dest = d;
+				debug( "Routing block '%s' matched to destination '%s'",
+					n->name, d->name );
+				break;
+			}
+
+		if( !n->dest )
+		{
+			err( "Could not find routing policy %s relay target '%s' in relay config.",
+				n->name, n->relay );
+			return -1;
+		}
+	}
+
+	// found them all, wicked
+	return 0;
+};
+
+
+
 COAL_CTL *create_config( void )
 {
 	COAL_CTL *c;
@@ -258,6 +296,7 @@ COAL_CTL *create_config( void )
 	c->mem         = mem_config_defaults( );
 	c->sync        = sync_config_defaults( );
 	c->stats       = stats_config_defaults( );
+	c->relay       = relay_config_defaults( );
 
 	c->pidfile     = strdup( DEFAULT_PID_FILE );
 	c->basedir     = strdup( DEFAULT_BASE_DIR );

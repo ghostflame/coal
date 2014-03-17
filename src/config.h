@@ -22,6 +22,7 @@ struct coal_control
 	LOCK_CTL		*	locks;
 	SYNC_CTL		*	sync;
 	STAT_CTL		*	stats;
+	REL_CTL			*	relay;
 
 	// where as-yet-unclassified data goes
 	POINT			*	data_in;
@@ -56,6 +57,7 @@ struct config_context
 // FUNCTIONS
 
 int get_config( char *path );
+int config_check_relay( void );
 COAL_CTL *create_config( void );
 
 

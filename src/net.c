@@ -339,32 +339,33 @@ NET_CTL *net_config_defaults( void )
 
 	net                     = (NET_CTL *) allocz( sizeof( NET_CTL ) );
 
-	net->line               = (NET_TYPE_CTL *) allocz( sizeof( NET_TYPE_CTL ) );
-	net->line->data         = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
-	net->line->data->label  = strdup( "line data" );
-	net->line->data->port   = DEFAULT_NET_LINE_DATA_PORT;
-	net->line->data->sock   = -1;
-	net->line->query        = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
-	net->line->query->label = strdup( "line queries" );
-	net->line->query->port  = DEFAULT_NET_LINE_QUERY_PORT;
-	net->line->query->sock  = -1;
-	net->line->type         = NET_COMM_LINE;
-	net->line->enabled      = DEFAULT_NET_LINE_ENABLED;
+	net->line                = (NET_TYPE_CTL *) allocz( sizeof( NET_TYPE_CTL ) );
+	net->line->data          = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
+	net->line->data->label   = strdup( "line data" );
+	net->line->data->port    = DEFAULT_NET_LINE_DATA_PORT;
+	net->line->data->sock    = -1;
+	net->line->query         = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
+	net->line->query->label  = strdup( "line queries" );
+	net->line->query->port   = DEFAULT_NET_LINE_QUERY_PORT;
+	net->line->query->sock   = -1;
+	net->line->type          = NET_COMM_LINE;
+	net->line->enabled       = DEFAULT_NET_LINE_ENABLED;
 
-	net->bin                = (NET_TYPE_CTL *) allocz( sizeof( NET_TYPE_CTL ) );
-	net->bin->data          = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
-	net->bin->data->label   = strdup( "binary data" );
-	net->bin->data->port    = DEFAULT_NET_BIN_DATA_PORT;
-	net->bin->data->sock    = -1;
-	net->bin->query         = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
-	net->bin->query->label  = strdup( "binary queries" );
-	net->bin->query->port   = DEFAULT_NET_BIN_QUERY_PORT;
-	net->bin->query->sock   = -1;
-	net->bin->type          = NET_COMM_BIN;
-	net->bin->enabled       = DEFAULT_NET_BIN_ENABLED;
+	net->bin                 = (NET_TYPE_CTL *) allocz( sizeof( NET_TYPE_CTL ) );
+	net->bin->data           = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
+	net->bin->data->label    = strdup( "binary data" );
+	net->bin->data->port     = DEFAULT_NET_BIN_DATA_PORT;
+	net->bin->data->sock     = -1;
+	net->bin->query          = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
+	net->bin->query->label   = strdup( "binary queries" );
+	net->bin->query->port    = DEFAULT_NET_BIN_QUERY_PORT;
+	net->bin->query->sock    = -1;
+	net->bin->type           = NET_COMM_BIN;
+	net->bin->enabled        = DEFAULT_NET_BIN_ENABLED;
 
 	return net;
 }
+
 
 int net_config_line( AVP *av )
 {

@@ -9,7 +9,7 @@
 #define DEFAULT_NODE_PCACHE_SZ		NODE_PCACHE_SZ_MEDIUM
 #define DEFAULT_NODE_ROOT			"nodes"
 
-#define NODE_RET_MAX_PATTERNS		32
+#define NODE_ROUTE_MAX_PATTERNS		32
 
 #define NODE_FLAG_LEAF				0x01
 #define NODE_FLAG_WRITING			0x02
@@ -26,13 +26,17 @@ struct path_cache
 {
 	PCACHE			*	next;
 	char			*	path;		// path string, pre-parsing
-	NODE			*	node;		// relevant node
+	union {
+		NODE			*	node;		// relevant node
+		RDEST			*	dest;		// relevant destination
+	}					target;
 #ifdef CKSUM_64BIT
 	uint64_t			sum;		// hash value, un-modulo'd
 #else
 	uint32_t			sum;		// hash value, un-modulo'd
 #endif
-	int					len;		// string length
+	short				len;		// string length
+	short				relay;		// is this a relay path?
 };
 
 
@@ -50,22 +54,27 @@ struct path_data
 };
 
 
-struct node_retain
+struct node_routing
 {
-	NODE_RET		*	next;
+	NODE_ROUTE		*	next;
 
 	// the name of this retain string
 	char			*	name;
 
 	// what we match
-	char			*	patterns[NODE_RET_MAX_PATTERNS];
-	regex_t			*	rgx[NODE_RET_MAX_PATTERNS];
+	char			*	patterns[NODE_ROUTE_MAX_PATTERNS];
+	regex_t			*	rgx[NODE_ROUTE_MAX_PATTERNS];
 
 	// retain strings are handled by libc3db
 	char			*	retain;
 
+	// relay target
+	char			*	relay;
+	RDEST			*	dest;
+
 	int					pat_count;
 	int					ret_len;
+	int					rel_len;
 
 	int					id;
 };
@@ -90,7 +99,7 @@ struct node_data
 	// timestamp
 	double				updated;
 
-	NODE_RET		*	policy;
+	NODE_ROUTE		*	policy;
 
 	// incoming data
 	POINT			*	incoming;		// waiting to be written
@@ -118,8 +127,8 @@ struct node_control
 	unsigned int		leaves;
 	unsigned int		branches;
 
-	// retention policies
-	NODE_RET		*	policies;
+	// routing policies
+	NODE_ROUTE		*	policies;
 };
 
 
@@ -155,7 +164,7 @@ int node_start_discovery( void );
 
 NODE_CTL *node_config_defaults( void );
 int node_config_line( AVP *av );
-int node_retain_line( AVP *av );
+int node_routing_line( AVP *av );
 
 void node_sort_retentions( void );
 

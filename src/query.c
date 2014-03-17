@@ -21,7 +21,7 @@ int find_cached_node( QUERY *q )
 		 && pc->len == q->path->len
 		 && !memcmp( q->path->str, pc->path, pc->len ) )
 		{
-			q->node = pc->node;
+			q->node = pc->target.node;
 			return 0;
 		}
 

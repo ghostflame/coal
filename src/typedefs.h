@@ -14,6 +14,7 @@ typedef struct node_control			NODE_CTL;
 typedef struct lock_control			LOCK_CTL;
 typedef struct sync_control			SYNC_CTL;
 typedef struct stat_control			STAT_CTL;
+typedef struct relay_control		REL_CTL;
 
 // other structures
 typedef struct config_context 		CCTXT;
@@ -21,13 +22,15 @@ typedef struct data_point 			POINT;
 typedef struct log_file    			LOG_FILE;
 typedef struct query_data			QUERY;
 typedef struct host_data			HOST;
-typedef struct node_retain			NODE_RET;
+typedef struct node_routing			NODE_ROUTE;
 typedef struct node_data			NODE;
 typedef struct path_cache			PCACHE;
 typedef struct path_data			PATH;
 typedef struct thread_data			THRD;
 typedef struct words_data			WORDS;
 typedef struct av_pair				AVP;
+typedef struct relay_destination	RDEST;
+typedef struct relay_connection		RCONN;
 
 // stats structures
 typedef struct data_stats_data		DSTATS;

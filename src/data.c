@@ -106,8 +106,8 @@ uint32_t data_path_cksum( char *str, int len )
 
 
 // as fast as possible here - this is the happy path
-// for finding which node to add a point to
-int data_add_point( POINT *p )
+// for finding where to send a point
+int data_route_point( POINT *p )
 {
 	register PCACHE *pc;
   	uint32_t sum, hval;
@@ -120,7 +120,10 @@ int data_add_point( POINT *p )
 		 && pc->len == p->path->len
 		 && !memcmp( pc->path, p->path->str, pc->len ) )
 		{
-			node_add_point( pc->node, p );
+			if( pc->relay )
+				relay_add_point( pc->target.dest, p );
+			else
+				node_add_point( pc->target.node, p );
 			return 0;
 		}
 
@@ -129,16 +132,24 @@ int data_add_point( POINT *p )
 
 
 
-void data_add_path_cache( NODE *n, PATH *p )
+
+void data_add_path_cache( PATH *p, NODE *n, RDEST *d )
 {
 	uint32_t hval;
 	PCACHE *pc;
 
 	pc       = (PCACHE *) allocz( sizeof( PCACHE ) );
-	pc->node = n;
 	pc->len  = p->len;
 	pc->path = str_dup( p->str, pc->len );
 	pc->sum  = data_path_cksum( pc->path, pc->len );
+
+	if( n )
+		pc->target.node = n;
+	else
+	{
+		pc->target.dest = d;
+		pc->relay       = 1;
+	}
 
 	hval = pc->sum % ctl->node->pcache_sz;
 
@@ -147,11 +158,17 @@ void data_add_path_cache( NODE *n, PATH *p )
 	pc->next = ctl->node->pcache[hval];
 	ctl->node->pcache[hval] = pc;
 
-	ndebug( "Node %u added to path cache at position %u",
-		n->id, hval );
+	if( n )
+	{
+		ndebug( "Node %u added to path cache at position %u",
+			n->id, hval );
+	}
 
 	pthread_mutex_unlock( &(ctl->locks->cache) );
 }
+
+
+
 
 
 
@@ -235,7 +252,7 @@ POINT *data_line_fetch( HOST *h )
 			                             h->val->len[DATA_FIELD_PATH] );
 
 			// try it the quick way - pcache
-			if( data_add_point( p ) == 0 )
+			if( data_route_point( p ) == 0 )
 			{
 				++(h->points);
 				continue;
