@@ -1,6 +1,28 @@
 #include "coal.h"
 
 
+char *data_bin_type_names( int type )
+{
+	switch( type )
+	{
+		case BINF_TYPE_DATA:
+			return "data";
+		case BINF_TYPE_QUERY:
+			return "query";
+		case BINF_TYPE_QUERY_RET:
+			return "query answer";
+		case BINF_TYPE_TREE:
+			return "tree query";
+		case BINF_TYPE_TREE_RET:
+			return "tree answer";
+	}
+
+	return "unknown";
+}
+
+
+
+
 int data_path_parse( PATH *p )
 {
 	// make a copy for strwords to eat
@@ -218,9 +240,116 @@ void grab_incoming( POINT **list )
 
 
 
+
+POINT *data_bin_fetch( HOST *h )
+{
+	int i, len, type;
+	POINT *list, *p;
+	void *buf;
+
+	list = NULL;
+
+	while( net_read_bin( h ) > 0 )
+		for( i = 0; i < h->all->wc; i++ )
+		{
+			// each of these is a binary chunk
+			buf = h->all->wd[i];
+			len = h->all->len[i];
+
+			if( ( type = *((uint8_t *) ( buf + 1 )) ) != BINF_TYPE_DATA )
+			{
+				warn( "Received type %d/%s from host %s on data bin connection.",
+					type, data_bin_type_names( type ), h->name );
+				h->flags |= HOST_CLOSE;
+				return NULL;
+			}
+
+			p           = mem_new_point( );
+			p->data.ts  = *((time_t *) ( buf + 4 ));
+			p->data.val = *((float *)  ( buf + 8 ));
+			p->path     = mem_new_path( (char *) ( buf + 12 ), len - 13 );
+
+			if( data_route_point( p ) == 0 )
+			{
+				++(h->points);
+				continue;
+			}
+
+			if( data_path_parse( p->path ) <= 0 )
+			{
+				info( "Invalid path string: '%s'", (char *) ( buf + 12 ) );
+				// frees the path
+				mem_free_point( &p );
+				continue;
+			}
+
+			p->next = list;
+			list    = p;
+		}
+
+	return list;
+}
+
+
 void data_bin_connection( HOST *h )
 {
-	return;
+	POINT *incoming, *inc_end, *vals, *pt;
+	struct pollfd p;
+	double lastPush;
+	int rv;
+
+	p.fd     = h->fd;
+	p.events = POLL_EVENTS;
+	lastPush = ctl->curr_time;
+	incoming = NULL;
+	inc_end  = NULL;
+
+	while( ctl->run_flags & RUN_LOOP )
+	{
+		if( ( ctl->curr_time - lastPush ) > 1.0 )
+		{
+			if( incoming && inc_end )
+			{
+				queue_up_incoming( incoming, inc_end );
+				inc_end = incoming = NULL;
+			}
+
+			lastPush = ctl->curr_time;
+		}
+
+		// timeout is responsiveness to RUN_LOOP
+		if( ( rv = poll( &p, 1, 500 ) ) < 0 )
+		{
+			if( errno != EINTR )
+			{
+				warn( "Poll error talking to host %s -- %s",
+					h->name, Err );
+				break;
+			}
+		}
+		else if( !rv )
+			continue;
+
+		if( ( vals = data_bin_fetch( h ) ) )
+		{
+			for( pt = vals; pt->next; pt = pt->next )
+				h->points++;
+
+			if( incoming )
+				pt->next = incoming;
+			else
+				inc_end  = pt;
+
+			incoming = vals;
+		}
+
+		// allows data_bin_fetch to signal to us to close the host
+		if( h->flags & HOST_CLOSE )
+			break;
+	}
+
+	if( incoming && inc_end )
+		queue_up_incoming( incoming, inc_end );	
 }
 
 
@@ -245,10 +374,10 @@ POINT *data_line_fetch( HOST *h )
 				continue;
 			}
 
-			p            = mem_new_point( );
-			p->data.val  = atof( h->val->wd[DATA_FIELD_VALUE] );
-			p->data.ts   = (time_t) strtoul( h->val->wd[DATA_FIELD_TS], NULL, 10 );
-			p->path      = mem_new_path( h->val->wd[DATA_FIELD_PATH],
+			p           = mem_new_point( );
+			p->data.val = atof( h->val->wd[DATA_FIELD_VALUE] );
+			p->data.ts  = (time_t) strtoul( h->val->wd[DATA_FIELD_TS], NULL, 10 );
+			p->path     = mem_new_path( h->val->wd[DATA_FIELD_PATH],
 			                             h->val->len[DATA_FIELD_PATH] );
 
 			// try it the quick way - pcache
@@ -268,7 +397,8 @@ POINT *data_line_fetch( HOST *h )
 				continue;
 			}
 
-			++(h->points);
+			// don't double-count!
+			//++(h->points);
 
 			p->next = list;
 			list    = p;

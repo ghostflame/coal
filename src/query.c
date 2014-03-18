@@ -73,11 +73,14 @@ int find_node( QUERY *q, NODE *parent )
 int query_send_children( HOST *h, QUERY *q )
 {
 	int i, hwmk;
+	char *to;
 	NODE *n;
 
 	for( i = 0, n = q->node->children; n; n = n->next, i++ );
 
-	h->outlen = snprintf( h->outbuf, MAX_PKT_OUT,
+	to = (char *) h->outbuf;
+
+	h->outlen = snprintf( to, MAX_PKT_OUT,
 					"%s 1 0 0 tree 0 %d %d\n",
 					q->path->str,
 					node_leaf_int( q->node ),
@@ -88,7 +91,7 @@ int query_send_children( HOST *h, QUERY *q )
 
 	for( n = q->node->children; n; n = n->next )
 	{
-		h->outlen += snprintf( h->outbuf + h->outlen, 128, "%s,%s\n",
+		h->outlen += snprintf( to + h->outlen, 128, "%s,%s\n",
 			( n->flags & NODE_FLAG_LEAF ) ? "leaf" : "branch", n->name );
 
 		if( h->outlen > hwmk )
@@ -108,13 +111,15 @@ int query_send_fields( HOST *h, QUERY *q )
 	int j, hwmk;
 	uint32_t t;
 	C3PNT *p;
+	char *to;
 
 	// tree queries are different
 	if( q->tree )
 		return query_send_children( h, q );
 
+	to = (char *) h->outbuf;
 
-	h->outlen = snprintf( h->outbuf, MAX_PKT_OUT,
+	h->outlen = snprintf( to, MAX_PKT_OUT,
 					"%s 0 %ld %ld %s %d %d %d\n",
 					q->path->str,
 					q->res.from, q->res.to,
@@ -135,9 +140,9 @@ int query_send_fields( HOST *h, QUERY *q )
 	for( j = 0; t < q->end; t += q->res.period, p++, j++ )
 	{
 		if( p->ts == t )
-			h->outlen += snprintf( h->outbuf + h->outlen, 64, "%u,%6f\n", t, p->val );
+			h->outlen += snprintf( to + h->outlen, 64, "%u,%6f\n", t, p->val );
 		else
-			h->outlen += snprintf( h->outbuf + h->outlen, 64, "%u,null\n", t );
+			h->outlen += snprintf( to + h->outlen, 64, "%u,null\n", t );
 
 		if( h->outlen > hwmk )
 			net_write_data( h );

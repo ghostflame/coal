@@ -89,9 +89,9 @@ int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog )
 
 int net_write_data( HOST *h )
 {
+	unsigned char *ptr;
 	struct pollfd p;
 	int rv, b;
-	char *ptr;
 
 	p.fd     = h->fd;
 	p.events = POLLOUT;
@@ -146,7 +146,7 @@ int net_read_data( HOST *h )
 		else
 		{
 			// no, we can't
-			char *p, *q;
+			unsigned char *p, *q;
 
 			i = h->keepLen;
 			p = h->inbuf;
@@ -189,6 +189,79 @@ int net_read_data( HOST *h )
 }
 
 
+// we quite badly abuse the strwords object to point
+// to our data structures
+int net_read_bin( HOST *h )
+{
+	unsigned char *start;
+	int i, l, ver, sz;
+
+	// try to read some more data
+	if( ( i = net_read_data( h ) ) <= 0 )
+		return i;
+
+	// anything to handle?
+	if( !h->inlen )
+		return 0;
+
+	// we'll chew through this data lump by lump
+	l     = h->inlen;
+	start = h->inbuf;
+	memset( h->all, 0, sizeof( WORDS ) );
+
+	// break the buffer up into our binary chunks
+	while( l > 0 )
+	{
+		// do we have a full start structure?
+		if( l < 4 )
+		{
+			h->keep    = start;
+			h->keepLen = l;
+
+			return h->all->wc;
+		}
+
+		// check version
+		ver = (int) *start;
+
+		// we only know version 1 so far
+		if( ver != 1 )
+		{
+			warn( "Invalid version (%d) from host %s.",
+				ver, h->name );
+			h->flags |= HOST_CLOSE;
+			return h->all->wc;
+		}
+
+		// read the record size
+		sz = (int) *((uint16_t *) ( start + 2 ));
+
+		// do we have a full record?
+		if( l < sz )
+		{
+			// no
+			h->keep    = start;
+			h->keepLen = l;
+
+			return h->all->wc;
+		}
+
+		// we don't interpret the chunks here
+		// we just keep them
+		h->all->wd[h->all->wc]  = (char *) start;
+		h->all->len[h->all->wc] = sz;
+		h->all->wc++;
+
+		// and move one
+		start += sz;
+		l     -= sz;
+	}
+
+	return h->all->wc;
+}
+
+
+
 int net_read_lines( HOST *h )
 {
 	int i, keeplast = 0, l;
@@ -209,7 +282,7 @@ int net_read_lines( HOST *h )
 	 	// make a note to keep the last line back
 		keeplast = 1;
 
-	if( strwords( h->all, h->inbuf, h->inlen, LINE_SEPARATOR ) < 0 )
+	if( strwords( h->all, (char *) h->inbuf, h->inlen, LINE_SEPARATOR ) < 0 )
 	{
 		debug( "Invalid buffer from data host %s.", h->name );
 		return -1;
@@ -243,7 +316,7 @@ int net_read_lines( HOST *h )
 		if( --(h->all->wc) )
 		{
 			// move it next time
-			h->keep    = h->all->wd[h->all->wc];
+			h->keep    = (unsigned char *) h->all->wd[h->all->wc];
 			h->keepLen = h->all->len[h->all->wc];
 		}
 		else

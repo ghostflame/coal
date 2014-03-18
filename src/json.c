@@ -6,11 +6,14 @@
 int json_send_children( HOST *h, QUERY *q )
 {
 	int i, hwmk;
+	char *to;
 	NODE *n;
+
+	to = (char *) h->outbuf;
 
 	for( i = 0, n = q->node->children; n; n = n->next, i++ );
 
-	h->outlen = snprintf( h->outbuf, MAX_PKT_OUT,
+	h->outlen = snprintf( to, MAX_PKT_OUT,
 		"{\"path\":\"%s\",\"type\":\"%s\",\"count\":%d,\"nodes\":[",
 		q->path->str,
 		node_leaf_str( q->node ),
@@ -22,7 +25,7 @@ int json_send_children( HOST *h, QUERY *q )
 
 	for( i = 0, n = q->node->children; n; n = n->next, i++ )
 	{
-		h->outlen += snprintf( h->outbuf + h->outlen, 128, "%s[%s,%s]",
+		h->outlen += snprintf( to + h->outlen, 128, "%s[%s,%s]",
 			( i ) ? "," : "",
 			( n->flags & NODE_FLAG_LEAF ) ? "leaf" : "branch",
 			n->name );
@@ -32,7 +35,7 @@ int json_send_children( HOST *h, QUERY *q )
 	}
 
 	// add closing braces
-	h->outlen += snprintf( h->outbuf + h->outlen, 4, "]}\n" );
+	h->outlen += snprintf( to + h->outlen, 4, "]}\n" );
 	net_write_data( h );
 
 	return 0;
@@ -44,12 +47,15 @@ int json_send_result( HOST *h, QUERY *q )
 {
 	int start, hwmk;
 	uint32_t t;
+	char *to;
 	C3PNT *p;
 
 	if( q->tree )
 		return json_send_children( h, q );
 
-	h->outlen = snprintf( h->outbuf, MAX_PKT_OUT,
+	to = (char *) h->outbuf;
+
+	h->outlen = snprintf( to, MAX_PKT_OUT,
 		"{\"path\":\"%s\",\"start\":%ld,\"end\":%ld,\"count\":%d,\"period\":%d,\"metric\":\"%s\",\"values\":[",
 		q->path->str, q->start, q->end, q->res.count, q->res.period,
 		c3db_metric_name( q->rtype ) );
@@ -64,10 +70,10 @@ int json_send_result( HOST *h, QUERY *q )
 	for( ; t < q->end; t += q->res.period, p++ )
 	{
 		if( p->ts == t )
-			h->outlen += snprintf( h->outbuf + h->outlen, 64, "%s[%u,%6f]",
+			h->outlen += snprintf( to + h->outlen, 64, "%s[%u,%6f]",
 					( start ) ? "" : ",", t, p->val );
 		else
-			h->outlen += snprintf( h->outbuf + h->outlen, 64, "%s[%u,null]",
+			h->outlen += snprintf( to + h->outlen, 64, "%s[%u,null]",
 					( start ) ? "" : ",", t );
 
 		start = 0;
@@ -80,7 +86,7 @@ int json_send_result( HOST *h, QUERY *q )
 	}
 
 	// add closing braces
-	h->outlen += snprintf( h->outbuf + h->outlen, 4, "]}\n" );
+	h->outlen += snprintf( to + h->outlen, 4, "]}\n" );
 	net_write_data( h );
 
 	return 0;

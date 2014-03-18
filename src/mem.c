@@ -26,8 +26,8 @@ HOST *mem_new_host( void )
 		// some data held over between packets
 		// we also never free hosts, so we never give
 		// this memory back
-		h->inbuf  = perm_str( 2 * MAX_PKT_IN );
-		h->outbuf = perm_str( MAX_PKT_OUT );
+		h->inbuf  = (unsigned char *) perm_str( 2 * MAX_PKT_IN );
+		h->outbuf = (unsigned char *) perm_str( MAX_PKT_OUT );
 		h->all    = (WORDS *) allocz( sizeof( WORDS ) );
 		h->val    = (WORDS *) allocz( sizeof( WORDS ) );
 	}
@@ -210,6 +210,7 @@ void mem_free_point_list( POINT *list )
 PATH *mem_new_path( char *str, int len )
 {
 	PATH *p;
+	int sz;
 
 	pthread_mutex_lock( &(ctl->locks->path) );
 	if( ctl->mem->paths )
@@ -232,10 +233,11 @@ PATH *mem_new_path( char *str, int len )
 
 	// we use double the length because we may need two
 	// copies, one for strwords to eat
-	if( p->sz < ( 2 * len ) )
+	sz = 2 * ( len + 1 );
+	if( p->sz < sz )
 	{
 		free( p->str );
-		p->sz  = 2 * len;
+		p->sz  = sz;
 		p->str = (char *) allocz( p->sz );
 	}
 

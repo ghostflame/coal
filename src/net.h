@@ -59,6 +59,8 @@ struct network_control
 };
 
 
+
+
 struct host_data
 {
 	HOST				*	next;
@@ -68,10 +70,10 @@ struct host_data
 	int						fd;
 	int						flags;  // close, new
 
-	char				*	inbuf;
-	char				*	outbuf;
+	unsigned char		*	inbuf;
+	unsigned char		*	outbuf;
 
-	char				*	keep;	// data held over
+	unsigned char		*	keep;	// data held over
 	int						keepLen;
 
 	int						type;	// line or bin
@@ -92,6 +94,7 @@ int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog );
 // r/w
 int net_write_data( HOST *h );
 int net_read_data( HOST *h );
+int net_read_bin( HOST *h );
 int net_read_lines( HOST *h );
 
 // init/shutdown
