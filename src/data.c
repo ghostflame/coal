@@ -256,7 +256,7 @@ POINT *data_bin_fetch( HOST *h )
 			buf = h->all->wd[i];
 			len = h->all->len[i];
 
-			if( ( type = *((uint8_t *) ( buf + 1 )) ) != BINF_TYPE_DATA )
+			if( ( type = (int) *((uint8_t *) ( buf + 1 )) ) != BINF_TYPE_DATA )
 			{
 				warn( "Received type %d/%s from host %s on data bin connection.",
 					type, data_bin_type_names( type ), h->name );

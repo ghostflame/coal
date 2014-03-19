@@ -35,6 +35,7 @@ enum data_line_fields
 };
 
 
+char *data_bin_type_names( int type );
 int data_path_parse( PATH *path );
 uint32_t data_path_cksum( char *str, int len );
 void data_add_path_cache( PATH *p, NODE *n, RDEST *d );

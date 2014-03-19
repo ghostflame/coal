@@ -70,6 +70,158 @@ int find_node( QUERY *q, NODE *parent )
 }
 
 
+
+int query_send_bin_children( HOST *h, QUERY *q )
+{
+	uint32_t *ui, sz;
+	uint16_t *us, j;
+	uint8_t *uc;
+	int hwmk;
+	NODE *n;
+
+	// calculate the size
+	for( sz = 12, j = 0, n = q->node->children; n; n = n->next )
+	{
+		sz += 5 + n->name_len;
+		j++;
+	}
+
+	// write out our header - 24 bytes
+	uc    = h->outbuf;
+	*uc++ = 0x01;
+	*uc++ = BINF_TYPE_TREE_RET;
+	*uc++ = 0;   // query results don't have size here
+	*uc++ = 0;   // because it may not fit in 64k
+	ui    = (uint32_t *) uc;
+	*ui++ = sz;
+	uc    = (uint8_t *) ui;
+	*uc++ = node_leaf_int( q->node );
+	*uc++ = 0;   // padding
+	us    = (uint16_t *) uc;
+	*us++ = j;
+
+	// now we're into sizes
+	hwmk  = MAX_PKT_OUT - 20;
+	uc    = (uint8_t *) us;
+
+	// write out the lengths
+	for( n = q->node->children; n; n = n->next )
+	{
+		*uc++ = node_leaf_int( n );
+		*uc++ = 0;   // padding
+		us    = (uint16_t *) uc;
+		*us++ = (uint16_t) n->name_len;
+		uc    = (uint8_t *) us;
+
+		if( ( uc - h->outbuf ) > hwmk )
+		{
+			net_write_data( h );
+			uc = h->outbuf;
+		}
+	}
+
+	// write out the paths
+	for( n = q->node->children; n; n = n->next )
+	{
+		// better to do this preemptively for the paths
+		if( uc > h->outbuf && ( ( uc + n->name_len ) - h->outbuf ) > hwmk )
+		{
+			net_write_data( h );
+			uc = h->outbuf;
+		}
+
+		// there's already a null at the end
+		memcpy( uc, n->name, n->name_len + 1 );
+		uc += n->name_len + 1;
+	}
+
+	// write any remainder
+	if( uc > h->outbuf )
+		net_write_data( h );
+
+	return 0;
+}
+
+
+
+
+int query_send_bin_result( HOST *h, QUERY *q )
+{
+	int j, hwmk;
+	uint32_t *ui;
+	uint16_t *us;
+	uint8_t *uc;
+	float *fp;
+	time_t t;
+	C3PNT *p;
+
+
+	// write out our header - 24 bytes
+	uc    = h->outbuf;
+	*uc++ = 0x01;
+	*uc++ = BINF_TYPE_QUERY_RET;
+	*uc++ = 0;   // query results don't have size here
+	*uc++ = 0;   // because it may not fit in 64k
+	ui    = (uint32_t *) uc;
+	*ui++ = 24 + ( 12 * q->res.count ) + q->path->len + 1;
+	*ui++ = (uint32_t) q->res.from;
+	*ui++ = (uint32_t) q->res.to;
+	uc    = (uint8_t *) ui;
+	*uc++ = (uint8_t) q->rtype;
+	*uc++ = 0;   // padding
+	us    = (uint16_t *) uc;
+	*us++ = (uint16_t) q->path->len;
+	ui    = (uint32_t *) us;
+	*ui++ = (uint32_t) q->res.count;
+
+
+	// sync to the period boundary
+	t     = q->start - ( q->start % q->res.period );
+	p     = q->res.points;
+	hwmk  = MAX_PKT_OUT - 20;
+
+	for( j = 0; t < q->end; t += q->res.period, p++, j++ )
+	{
+		*ui++ = (uint32_t) t;
+		if( p->ts == t )
+		{
+			*ui++ = 0x1;
+			fp    = (float *) ui++;
+			*fp   = p->val;
+		}
+		else
+		{
+			*ui++ = 0;
+			*ui++ = 0;
+		}
+
+		uc = (uint8_t *) ui;
+		if( ( uc - h->outbuf ) > hwmk )
+		{
+			net_write_data( h );
+			ui = (uint32_t *) h->outbuf;
+		}
+	}
+
+	uc = (uint8_t *) ui;
+
+	// is there enough room on the end for the path
+	if( ( ( uc + q->path->len ) - h->outbuf ) > ( 2 * MAX_PKT_OUT ) )
+	{
+		net_write_data( h );
+		uc = h->outbuf;
+	}
+
+	// and write the path on the end
+	memcpy( uc, q->path->str, q->path->len + 1 );
+	net_write_data( h );
+
+	return 0;
+}
+
+
+
+
 int query_send_children( HOST *h, QUERY *q )
 {
 	int i, hwmk;
@@ -112,10 +264,6 @@ int query_send_fields( HOST *h, QUERY *q )
 	uint32_t t;
 	C3PNT *p;
 	char *to;
-
-	// tree queries are different
-	if( q->tree )
-		return query_send_children( h, q );
 
 	to = (char *) h->outbuf;
 
@@ -165,18 +313,39 @@ int query_send_result( HOST *h, QUERY *q )
 			return query_send_fields( h, q );
 		case QUERY_FMT_JSON:
 			return json_send_result( h, q );
+		case QUERY_FMT_BIN:
+			return query_send_bin_result( h, q );
 	}
 
-	qwarn( "Cannot send request in format %d", q->format );
+	qwarn( "Cannot send query result in format %d", q->format );
 	return 0;
 }
+
+
+int query_send_tree( HOST *h, QUERY *q )
+{
+	switch( q->format )
+	{
+		case QUERY_FMT_FIELDS:
+			return query_send_children( h, q );
+		case QUERY_FMT_JSON:
+			return json_send_children( h, q );
+		case QUERY_FMT_BIN:
+			return query_send_bin_children( h, q );
+	}
+
+	qwarn( "Cannot send tree result in format %d", q->format );
+	return 0;
+}
+
 
 
 
 char *query_format_strings[QUERY_FMT_MAX] =
 {
 	"fields",
-	"json"
+	"json",
+	"bin"
 };
 
 
@@ -202,9 +371,99 @@ int query_format_type( char *str )
 }
 
 
+QUERY *query_bin_read( HOST *h )
+{
+	int i, len, type;
+	QUERY *q, *list;
+	void *buf;
+
+	list = NULL;
+
+	while( net_read_bin( h ) > 0 )
+		for( i = 0; i < h->all->wc; i++ )
+		{
+			// each of these is a binary chunk
+			buf = h->all->wd[i];
+			len = h->all->len[i];
+
+			type = (int) *((uint8_t *) ( buf + 1 ));
+
+			if( type != BINF_TYPE_QUERY
+			 && type != BINF_TYPE_TREE )
+			{
+				warn( "Received type %d/%s from host %s on query bin connection.",
+					type, data_bin_type_names( type ), h->name );
+				h->flags |= HOST_CLOSE;
+				return NULL;
+			}
+
+			q         = mem_new_query( );
+			q->format = QUERY_FMT_BIN;
+
+			if( type == BINF_TYPE_TREE )
+				q->tree = 1;
+			else
+			{
+				q->start = *((time_t *) ( buf + 4 ));
+				q->end   = *((time_t *) ( buf + 8 ));
+				q->rtype = (int) *((uint8_t *) ( buf + 12 ));
+
+				if( q->rtype <= C3DB_REQ_INVLD || q->rtype >= C3DB_REQ_END )
+				{
+					qwarn( "Invalid metric %d in query from host %s",
+						q->rtype, h->name );
+					mem_free_query( &q );
+					continue;
+				}
+
+				// do some timestamp checks
+				if( !q->start )
+					// you don't really mean all time, do you?
+					// an informal way of saying '24hrs please'
+					q->start = (time_t) ( ctl->curr_time - 86400.0 );
+
+				if( !q->end )
+					// an informal way of saying 'now'
+					q->end = (time_t) ctl->curr_time;
+				else if( q->end < q->start )
+				{
+					qwarn( "End < start in query from host %s", h->name );
+					mem_free_query( &q );
+					continue;
+				}
+			}
+
+			q->path = mem_new_path( (char *) ( buf + 13 ), len - 14 );
 
 
-QUERY *query_read( HOST *h )
+			if( find_cached_node( q ) != 0 )
+			{
+				if( data_path_parse( q->path ) <= 0 )
+				{
+					qinfo( "Invalid path string: '%s'",
+						(char *) buf + 13 );
+					mem_free_query( &q );
+					continue;
+				}
+
+				if( find_node( q, ctl->node->nodes ) != 0 )
+				{
+					qwarn( "Query for unknown node '%s'",
+						q->path->str );
+					mem_free_query( &q );
+					continue;
+				}
+			}
+
+			q->next = list;
+			list    = q;
+		}
+
+	return list;
+}
+
+
+QUERY *query_line_read( HOST *h )
 {
 	QUERY *q, *list;
 	int i, len;
@@ -248,7 +507,7 @@ QUERY *query_read( HOST *h )
 
 				// do some checks on the timestamps
 				if( !q->start ) {
-					// you don't really mean all time
+					// you don't really mean all time, do you?
 					// an informal way of saying '24hrs please'
 					q->start = (time_t) ( ctl->curr_time - 86400.0 );
 				}
@@ -257,7 +516,7 @@ QUERY *query_read( HOST *h )
 					// an informal way of saying 'now'
 					q->end = (time_t) ctl->curr_time;
 				} else if( q->end < q->start ) {
-					qwarn( "Start < end in query from host %s", h->name );
+					qwarn( "End < start in query from host %s", h->name );
 					mem_free_query( &q );
 					continue;
 				}
@@ -269,6 +528,15 @@ QUERY *query_read( HOST *h )
 			 || q->format == QUERY_FMT_INVALID )
 			{
 				qwarn( "Invalid type or format from host %s", h->name );
+				mem_free_query( &q );
+				continue;
+			}
+
+			// cannot send binary format answers on this connection
+			if( q->format == QUERY_FMT_BIN )
+			{
+				qwarn( "Asked for binary format query answer on a line format connection from host %s",
+					h->name );
 				mem_free_query( &q );
 				continue;
 			}
@@ -373,19 +641,14 @@ int query_data( QUERY *q )
 
 
 
-void *query_connection( void *arg )
+void query_bin_connection( HOST *h )
 {
-  	THRD *t = (THRD *) arg;
 	struct pollfd p;
 	QUERY *list, *q;
-	HOST *h;
 	int rv;
 
-	h        = (HOST *) t->arg;
 	p.fd     = h->fd;
 	p.events = POLL_EVENTS;
-
-	qinfo( "Query connection from %s", h->name );
 
 	while( ctl->run_flags & RUN_LOOP )
 	{
@@ -404,7 +667,67 @@ void *query_connection( void *arg )
 			continue;
 
 		// we what we have
-		if( !( list = query_read( h ) ) )
+		if( !( list = query_line_read( h ) ) )
+		{
+			if( h->flags & HOST_CLOSE )
+				break;
+
+			continue;
+		}
+
+		while( list )
+		{
+			q    = list;
+			list = q->next;
+
+			qdebug( "Found a query to handle." );
+
+			if( q->tree )
+			{
+				// we've already found the node
+				query_send_tree( h, q );
+			}
+			else
+			{
+				if( query_data( q ) == 0 )
+					query_send_result( h, q );
+			}
+		}
+
+		// error?
+		if( h->flags & HOST_CLOSE )
+			break;
+	}
+}
+
+
+void query_line_connection( HOST *h )
+{
+	struct pollfd p;
+	QUERY *list, *q;
+	int rv;
+
+	p.fd     = h->fd;
+	p.events = POLL_EVENTS;
+
+	while( ctl->run_flags & RUN_LOOP )
+	{
+		if( ( rv = poll( &p, 1, 100 ) ) < 0 )
+		{
+			if( errno != EINTR )
+			{
+				qwarn( "Error polling query connection from %s -- %s",
+						h->name, Err );
+				h->flags |= HOST_CLOSE;
+				break;
+			}
+			continue;
+		}
+		else if( !rv )
+			continue;
+
+		// we what we have
+		if( !( list = query_line_read( h ) ) )
 		{
 			if( h->flags & HOST_CLOSE )
 				break;
@@ -435,6 +758,29 @@ void *query_connection( void *arg )
 		if( h->flags & HOST_CLOSE )
 			break;
 	}
+}
+
+
+
+void *query_connection( void *arg )
+{
+	THRD *t;
+	HOST *h;
+
+	t = (THRD *) arg;
+	h = (HOST *) t->arg;
+
+	info( "Accepted query connection from host %s", h->name );
+
+	switch( h->type )
+	{
+		case NET_COMM_LINE:
+			query_line_connection( h );
+		case NET_COMM_BIN:
+			query_bin_connection( h );
+		default:
+			break;
+	}
 
 	// all done
 	if( shutdown( h->fd, SHUT_RDWR ) )
@@ -447,6 +793,8 @@ void *query_connection( void *arg )
 	free( t );
 	return NULL;
 }
+
+
 
 
 

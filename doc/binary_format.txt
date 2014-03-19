@@ -51,16 +51,17 @@ Output (tree query):
 Offset   Size     Field
 0        1        Version
 1        1        Type (1 = data, 8 = query, 9 = query answer, 16 = tree query, 17 = tree answer)
-2        2        Record size (ie, size - 4 more bytes to read)
-4        1        Requested node type (1 = leaf, 2 = branch)
-5        1        Padding
-6        2        Result count (which we'll call N)
-<N times, starting offset X = 8>
+2        2        Padding (record size not confined to 64k)
+4        4        Record size
+8        1        Requested node type (1 = leaf, 2 = branch)
+9        1        Padding
+10        2        Result count (which we'll call N)
+<N times, starting offset X = 12>
 X+4i     1        Node type (1 = leaf, 2 = branch)
 X+1+4i   1        Padding
 X+2+4i   2        Path length (capped at 1024)
 ...
-<i = 0 to N-1 times, starting offset X = 8 + 4i, len being sum of path lengths to i>
+<i = 0 to N-1 times, starting offset X = 12 + 4i, len being sum of path lengths to i>
 X+(len)  var      Path
 ...
 
@@ -86,8 +87,9 @@ Offset   Size     Field
 18       2        Path length
 20       4        Result count (which we'll call N)
 <i = 0 to N-1 times, starting offset X = 24)
-X+8i     4        (time_t) timestamp
-X+4+8i   4        (float) value
+X+12i    4        (time_t) timestamp
+X+4+12i  4        Flags ( 0x1 : valid )
+X+8+12i  4        (float) value
 ...
-24+8i    var      Path
+24+12i    var      Path
 
