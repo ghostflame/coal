@@ -1,4 +1,4 @@
-DIRS   = src
+DIRS   = lib src
 TARGET = all
 
 INSDIR = /opt/coal
