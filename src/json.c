@@ -3,91 +3,88 @@
 
 
 
-int json_send_children( HOST *h, QUERY *q )
+int json_send_children( NSOCK *s, QUERY *q )
 {
-	int i, hwmk;
 	char *to;
+	int i;
 	NODE *n;
-
-	to = (char *) h->outbuf;
 
 	for( i = 0, n = q->node->children; n; n = n->next, i++ );
 
-	h->outlen = snprintf( to, MAX_PKT_OUT,
+	to  = (char *) s->out.buf;
+	to += snprintf( to, 1044,
 		"{\"path\":\"%s\",\"type\":\"%s\",\"count\":%d,\"nodes\":[",
 		q->path->str,
 		node_leaf_str( q->node ),
 		i );
 
-	net_write_data( h );
-
-	hwmk = MAX_PKT_OUT - 134;
-
 	for( i = 0, n = q->node->children; n; n = n->next, i++ )
 	{
-		h->outlen += snprintf( to + h->outlen, 128, "%s[%s,%s]",
+		to += snprintf( to, 1024, "%s[%s,%s]",
 			( i ) ? "," : "",
 			( n->flags & NODE_FLAG_LEAF ) ? "leaf" : "branch",
 			n->name );
 
-		if( h->outlen > hwmk )
-			net_write_data( h );
+		if( to > (char *) s->out.hwmk )
+		{
+			s->out.len = to - (char *) s->out.buf;
+			net_write_data( s );
+			to = (char *) s->out.buf;
+		}
 	}
 
 	// add closing braces
-	h->outlen += snprintf( to + h->outlen, 4, "]}\n" );
-	net_write_data( h );
+	to += snprintf( to, 4, "]}\n" );
+	s->out.len = to - (char *) s->out.buf;
+	net_write_data( s );
 
 	return 0;
 }
 
 
 
-int json_send_result( HOST *h, QUERY *q )
+int json_send_result( NSOCK *s, QUERY *q )
 {
-	int start, hwmk;
 	uint32_t t;
+	int start;
 	char *to;
 	C3PNT *p;
 
 	if( q->tree )
-		return json_send_children( h, q );
+		return json_send_children( s, q );
 
-	to = (char *) h->outbuf;
-
-	h->outlen = snprintf( to, MAX_PKT_OUT,
+	to  = (char *) s->out.buf;
+	to += snprintf( to, 1096,
 		"{\"path\":\"%s\",\"start\":%ld,\"end\":%ld,\"count\":%d,\"period\":%d,\"metric\":\"%s\",\"values\":[",
 		q->path->str, q->start, q->end, q->res.count, q->res.period,
 		c3db_metric_name( q->rtype ) );
 
-	// write that
-	net_write_data( h );
-
-	p    = q->res.points;
-	hwmk = MAX_PKT_OUT - 70;
-	t    = q->start - ( q->start % q->res.period );
+	p = q->res.points;
+	t = q->start - ( q->start % q->res.period );
 
 	for( ; t < q->end; t += q->res.period, p++ )
 	{
 		if( p->ts == t )
-			h->outlen += snprintf( to + h->outlen, 64, "%s[%u,%6f]",
+			to += snprintf( to, 64, "%s[%u,%6f]",
 					( start ) ? "" : ",", t, p->val );
 		else
-			h->outlen += snprintf( to + h->outlen, 64, "%s[%u,null]",
+			to += snprintf( to, 64, "%s[%u,null]",
 					( start ) ? "" : ",", t );
 
 		start = 0;
 
-		if( h->outlen > hwmk )
+		if( to > (char *) s->out.hwmk )
 		{
-			net_write_data( h );
-			h->outlen = 0;
+			s->out.len = to - (char *) s->out.buf;
+			net_write_data( s );
+			to = (char *) s->out.buf;
 		}
 	}
 
 	// add closing braces
-	h->outlen += snprintf( to + h->outlen, 4, "]}\n" );
-	net_write_data( h );
+	to += snprintf( to, 4, "]}\n" );
+	s->out.len = to - (char *) s->out.buf;
+	net_write_data( s );
 
 	return 0;
 }

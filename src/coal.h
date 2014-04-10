@@ -21,6 +21,10 @@
 #include <netinet/in.h>
 #include <openssl/sha.h>
 
+// this pulls in some definitions of the binary interface
+#include <libcoal.h>
+
+
 // crazy-prevention - this goes here
 #include "typedefs.h"
 

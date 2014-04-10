@@ -259,8 +259,8 @@ POINT *data_bin_fetch( HOST *h )
 			if( ( type = (int) *((uint8_t *) ( buf + 1 )) ) != BINF_TYPE_DATA )
 			{
 				warn( "Received type %d/%s from host %s on data bin connection.",
-					type, data_bin_type_names( type ), h->name );
-				h->flags |= HOST_CLOSE;
+					type, data_bin_type_names( type ), h->net->name );
+				h->net->flags |= HOST_CLOSE;
 				return NULL;
 			}
 
@@ -298,7 +298,7 @@ void data_bin_connection( HOST *h )
 	double lastPush;
 	int rv;
 
-	p.fd     = h->fd;
+	p.fd     = h->net->sock;
 	p.events = POLL_EVENTS;
 	lastPush = ctl->curr_time;
 	incoming = NULL;
@@ -323,7 +323,7 @@ void data_bin_connection( HOST *h )
 			if( errno != EINTR )
 			{
 				warn( "Poll error talking to host %s -- %s",
-					h->name, Err );
+					h->net->name, Err );
 				break;
 			}
 		}
@@ -344,7 +344,7 @@ void data_bin_connection( HOST *h )
 		}
 
 		// allows data_bin_fetch to signal to us to close the host
-		if( h->flags & HOST_CLOSE )
+		if( h->net->flags & HOST_CLOSE )
 			break;
 	}
 
@@ -370,7 +370,7 @@ POINT *data_line_fetch( HOST *h )
 
 			if( strwords( h->val, wd, len, FIELD_SEPARATOR ) != DATA_FIELD_COUNT )
 			{
-				debug( "Invalid line from data host %s", h->name );
+				debug( "Invalid line from data host %s", h->net->name );
 				continue;
 			}
 
@@ -416,7 +416,7 @@ void data_line_connection( HOST *h )
 	double lastPush;
 	int rv;
 
-	p.fd     = h->fd;
+	p.fd     = h->net->sock;
 	p.events = POLL_EVENTS;
 	lastPush = ctl->curr_time;
 	incoming = NULL;
@@ -441,7 +441,7 @@ void data_line_connection( HOST *h )
 			if( errno != EINTR )
 			{
 				warn( "Poll error talking to host %s -- %s",
-					h->name, Err );
+					h->net->name, Err );
 				break;
 			}
 		}
@@ -462,7 +462,7 @@ void data_line_connection( HOST *h )
 		}
 
 		// allows data_fetch to signal us to close the host
-		if( h->flags & HOST_CLOSE )
+		if( h->net->flags & HOST_CLOSE )
 			break;
 	}
 
@@ -482,7 +482,7 @@ void *data_connection( void *arg )
 	t = (THRD *) arg;
 	h = (HOST *) t->arg;
 
-	info( "Accepted data connection from host %s", h->name );
+	info( "Accepted data connection from host %s", h->net->name );
 
 	switch( h->type )
 	{
@@ -495,13 +495,14 @@ void *data_connection( void *arg )
 	}
 
 	info( "Closing connection from host %s after %lu data points.",
-				h->name, h->points );
+				h->net->name, h->points );
 
-	if( shutdown( h->fd, SHUT_RDWR ) )
+	if( shutdown( h->net->sock, SHUT_RDWR ) )
 		err( "Shutdown error on host %s -- %s",
-				h->name, Err );
+				h->net->name, Err );
 
-	close( h->fd );
+	close( h->net->sock );
+	h->net->sock = -1;
 	mem_free_host( &h );
 
   	free( t );

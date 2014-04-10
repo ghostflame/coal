@@ -21,15 +21,10 @@ HOST *mem_new_host( void )
 		++(ctl->mem->mem_hosts);
 		pthread_mutex_unlock( &(ctl->locks->host) );
 
-		h = (HOST *) allocz( sizeof( HOST ) );
-		// we need more than the max packet, in case we have
-		// some data held over between packets
-		// we also never free hosts, so we never give
-		// this memory back
-		h->inbuf  = (unsigned char *) perm_str( 2 * MAX_PKT_IN );
-		h->outbuf = (unsigned char *) perm_str( MAX_PKT_OUT );
-		h->all    = (WORDS *) allocz( sizeof( WORDS ) );
-		h->val    = (WORDS *) allocz( sizeof( WORDS ) );
+		h      = (HOST *) allocz( sizeof( HOST ) );
+		h->net = net_make_sock( COAL_NETBUF_SZ, COAL_NETBUF_SZ, NULL, &(h->peer) );
+		h->all = (WORDS *) allocz( sizeof( WORDS ) );
+		h->val = (WORDS *) allocz( sizeof( WORDS ) );
 	}
 
 	return h;
@@ -46,17 +41,18 @@ void mem_free_host( HOST **h )
 	sh = *h;
 	*h = NULL;
 
-	sh->fd     = 0;
-	sh->flags  = 0;
-	sh->points = 0;
+	sh->points        = 0;
+	sh->net->sock     = -1;
+	sh->net->flags    = 0;
+	sh->net->out.len  = 0;
+	sh->net->in.len   = 0;
+	sh->net->keep.buf = NULL;
+	sh->net->keep.len = 0;
 
-	sh->inlen  = 0;
-	sh->outlen = 0;
-
-	if( sh->name )
+	if( sh->net->name )
 	{
-	  	free( sh->name );
-		sh->name = NULL;
+	  	free( sh->net->name );
+		sh->net->name = NULL;
 	}
 
 	pthread_mutex_lock( &(ctl->locks->host) );

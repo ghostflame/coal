@@ -9,10 +9,12 @@ VER    = $(MAXV).$(MINV).$(MICV)
 BINDIR = ../bin
 LC3DIR = ../../libc3db/lib
 HC3DIR = ../../libc3db/include
+LCLDIR = ../lib
+HCLDIR = ../include
 
 OBJS   = utils.o log.o thread.o config.o mem.o loop.o node.o net.o data.o query.o json.o sync.o stats.o relay.o main.o
 
-IFLAGS = -I. -I$(HC3DIR)
+IFLAGS = -I. -I$(HC3DIR) -I$(HCLDIR)
 DFLAGS = -g -pg -ggdb3 -DDEBUG
 TFLAGS = -pthread
 CFLAGS = $(TFLAGS) $(IFLAGS)

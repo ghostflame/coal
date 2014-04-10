@@ -71,12 +71,11 @@ int find_node( QUERY *q, NODE *parent )
 
 
 
-int query_send_bin_children( HOST *h, QUERY *q )
+int query_send_bin_children( NSOCK *s, QUERY *q )
 {
+	uint8_t *uc;
 	uint32_t *ui, sz;
 	uint16_t *us, j;
-	uint8_t *uc;
-	int hwmk;
 	NODE *n;
 
 	// calculate the size
@@ -87,7 +86,7 @@ int query_send_bin_children( HOST *h, QUERY *q )
 	}
 
 	// write out our header - 24 bytes
-	uc    = h->outbuf;
+	uc    = s->out.buf;
 	*uc++ = 0x01;
 	*uc++ = BINF_TYPE_TREE_RET;
 	*uc++ = 0;   // query results don't have size here
@@ -101,7 +100,6 @@ int query_send_bin_children( HOST *h, QUERY *q )
 	*us++ = j;
 
 	// now we're into sizes
-	hwmk  = MAX_PKT_OUT - 20;
 	uc    = (uint8_t *) us;
 
 	// write out the lengths
@@ -113,10 +111,11 @@ int query_send_bin_children( HOST *h, QUERY *q )
 		*us++ = (uint16_t) n->name_len;
 		uc    = (uint8_t *) us;
 
-		if( ( uc - h->outbuf ) > hwmk )
+		if( uc > s->out.hwmk )
 		{
-			net_write_data( h );
-			uc = h->outbuf;
+			s->out.len = uc - s->out.buf;
+			net_write_data( s );
+			uc = s->out.buf;
 		}
 	}
 
@@ -124,10 +123,11 @@ int query_send_bin_children( HOST *h, QUERY *q )
 	for( n = q->node->children; n; n = n->next )
 	{
 		// better to do this preemptively for the paths
-		if( uc > h->outbuf && ( ( uc + n->name_len ) - h->outbuf ) > hwmk )
+		if( ( uc + n->name_len ) > s->out.hwmk )
 		{
-			net_write_data( h );
-			uc = h->outbuf;
+			s->out.len = uc - s->out.buf;
+			net_write_data( s );
+			uc = s->out.buf;
 		}
 
 		// there's already a null at the end
@@ -135,9 +135,17 @@ int query_send_bin_children( HOST *h, QUERY *q )
 		uc += n->name_len + 1;
 	}
 
+	// add any additional empty space for alignment
+	s->out.len = uc - s->out.buf;
+	while( s->out.len % 4 )
+	{
+		*uc++ = '\0';
+		s->out.len++;
+	}
+
 	// write any remainder
-	if( uc > h->outbuf )
-		net_write_data( h );
+	if( s->out.len > 0 )
+		net_write_data( s );
 
 	return 0;
 }
@@ -145,19 +153,18 @@ int query_send_bin_children( HOST *h, QUERY *q )
 
 
 
-int query_send_bin_result( HOST *h, QUERY *q )
+int query_send_bin_result( NSOCK *s, QUERY *q )
 {
-	int j, hwmk;
 	uint32_t *ui;
 	uint16_t *us;
 	uint8_t *uc;
 	float *fp;
 	time_t t;
 	C3PNT *p;
-
+	int j;
 
 	// write out our header - 24 bytes
-	uc    = h->outbuf;
+	uc    = s->out.buf;
 	*uc++ = 0x01;
 	*uc++ = BINF_TYPE_QUERY_RET;
 	*uc++ = 0;   // query results don't have size here
@@ -176,9 +183,8 @@ int query_send_bin_result( HOST *h, QUERY *q )
 
 
 	// sync to the period boundary
-	t     = q->start - ( q->start % q->res.period );
-	p     = q->res.points;
-	hwmk  = MAX_PKT_OUT - 20;
+	t = q->start - ( q->start % q->res.period );
+	p = q->res.points;
 
 	for( j = 0; t < q->end; t += q->res.period, p++, j++ )
 	{
@@ -196,25 +202,37 @@ int query_send_bin_result( HOST *h, QUERY *q )
 		}
 
 		uc = (uint8_t *) ui;
-		if( ( uc - h->outbuf ) > hwmk )
+		if( uc > s->out.hwmk )
 		{
-			net_write_data( h );
-			ui = (uint32_t *) h->outbuf;
+			s->out.len = uc - s->out.buf;
+			net_write_data( s );
+			ui = (uint32_t *) s->out.buf;
 		}
 	}
 
 	uc = (uint8_t *) ui;
 
 	// is there enough room on the end for the path
-	if( ( ( uc + q->path->len ) - h->outbuf ) > ( 2 * MAX_PKT_OUT ) )
+	if( ( uc + q->path->len ) > s->out.hwmk )
 	{
-		net_write_data( h );
-		uc = h->outbuf;
+		s->out.len = uc - s->out.buf;
+		net_write_data( s );
+		uc = s->out.buf;
 	}
 
 	// and write the path on the end
 	memcpy( uc, q->path->str, q->path->len + 1 );
-	net_write_data( h );
+
+	// step over and write some empty space
+	uc += q->path->len + 1;
+	s->out.len = uc - s->out.buf;
+	while( s->out.len % 4 )
+	{
+		*uc++ = '\0';
+		s->out.len++;
+	}
+
+	net_write_data( s );
 
 	return 0;
 }
@@ -222,65 +240,57 @@ int query_send_bin_result( HOST *h, QUERY *q )
 
 
 
-int query_send_children( HOST *h, QUERY *q )
+int query_send_children( NSOCK *s, QUERY *q )
 {
-	int i, hwmk;
 	char *to;
 	NODE *n;
+	int i;
 
 	for( i = 0, n = q->node->children; n; n = n->next, i++ );
 
-	to = (char *) h->outbuf;
-
-	h->outlen = snprintf( to, MAX_PKT_OUT,
-					"%s 1 0 0 tree 0 %d %d\n",
-					q->path->str,
-					node_leaf_int( q->node ),
-					i );
-	net_write_data( h );
-
-	hwmk = MAX_PKT_OUT - 128;
+	to  = (char *) s->out.buf;
+	to += snprintf( to, s->out.sz, "%s 1 0 0 tree 0 %d %d\n",
+	               q->path->str, node_leaf_int( q->node ), i );
 
 	for( n = q->node->children; n; n = n->next )
 	{
-		h->outlen += snprintf( to + h->outlen, 128, "%s,%s\n",
+		to += snprintf( to, 1024, "%s,%s\n",
 			( n->flags & NODE_FLAG_LEAF ) ? "leaf" : "branch", n->name );
 
-		if( h->outlen > hwmk )
-			net_write_data( h );
+		if( to > (char *) s->out.hwmk )
+		{
+			s->out.len = to - (char *) s->out.buf;
+			net_write_data( s );
+			to = (char *) s->out.buf;
+		}
 	}
 
-	if( h->outlen )
-		net_write_data( h );
+	if( to > (char *) s->out.buf )
+	{
+	  	s->out.len = to - (char *) s->out.buf;
+		net_write_data( s );
+	}
 
 	return 0;
 }
 
 
 
-int query_send_fields( HOST *h, QUERY *q )
+int query_send_fields( NSOCK *s, QUERY *q )
 {
-	int j, hwmk;
 	uint32_t t;
 	C3PNT *p;
 	char *to;
+	int j;
 
-	to = (char *) h->outbuf;
+	to  = (char *) s->out.buf;
+	to += snprintf( to, 1024, "%s 0 %ld %ld %s %d %d %d\n",
+	                q->path->str, q->res.from, q->res.to,
+	                c3db_metric_name( q->rtype ),
+	                q->res.period, node_leaf_int( q->node ),
+	                q->res.count );
 
-	h->outlen = snprintf( to, MAX_PKT_OUT,
-					"%s 0 %ld %ld %s %d %d %d\n",
-					q->path->str,
-					q->res.from, q->res.to,
-					c3db_metric_name( q->rtype ),
-					q->res.period,
-					node_leaf_int( q->node ),
-					q->res.count );
-
-	// send that header
-	net_write_data( h );
-
-	p    = q->res.points;
-	hwmk = MAX_PKT_OUT - 66;
+	p = q->res.points;
 
 	// sync to the period boundaries
 	t = q->start - ( q->start % q->res.period );
@@ -288,16 +298,23 @@ int query_send_fields( HOST *h, QUERY *q )
 	for( j = 0; t < q->end; t += q->res.period, p++, j++ )
 	{
 		if( p->ts == t )
-			h->outlen += snprintf( to + h->outlen, 64, "%u,%6f\n", t, p->val );
+			to += snprintf( to, 64, "%u,%6f\n", t, p->val );
 		else
-			h->outlen += snprintf( to + h->outlen, 64, "%u,null\n", t );
+			to += snprintf( to, 64, "%u,null\n", t );
 
-		if( h->outlen > hwmk )
-			net_write_data( h );
+		if( to > (char *) s->out.hwmk )
+		{
+			s->out.len = to - (char *) s->out.buf;
+			net_write_data( s );
+			to = (char *) s->out.buf;
+		}
 	}
 
-	if( h->outlen )
-		net_write_data( h );
+	if( to > (char *) s->out.buf )
+	{
+	  	s->out.len = to - (char *) s->out.buf;
+		net_write_data( s );
+	}
 
 	return 0;
 }
@@ -310,11 +327,11 @@ int query_send_result( HOST *h, QUERY *q )
 	switch( q->format )
 	{
 		case QUERY_FMT_FIELDS:
-			return query_send_fields( h, q );
+			return query_send_fields( h->net, q );
 		case QUERY_FMT_JSON:
-			return json_send_result( h, q );
+			return json_send_result( h->net, q );
 		case QUERY_FMT_BIN:
-			return query_send_bin_result( h, q );
+			return query_send_bin_result( h->net, q );
 	}
 
 	qwarn( "Cannot send query result in format %d", q->format );
@@ -327,11 +344,11 @@ int query_send_tree( HOST *h, QUERY *q )
 	switch( q->format )
 	{
 		case QUERY_FMT_FIELDS:
-			return query_send_children( h, q );
+			return query_send_children( h->net, q );
 		case QUERY_FMT_JSON:
-			return json_send_children( h, q );
+			return json_send_children( h->net, q );
 		case QUERY_FMT_BIN:
-			return query_send_bin_children( h, q );
+			return query_send_bin_children( h->net, q );
 	}
 
 	qwarn( "Cannot send tree result in format %d", q->format );
@@ -392,8 +409,8 @@ QUERY *query_bin_read( HOST *h )
 			 && type != BINF_TYPE_TREE )
 			{
 				warn( "Received type %d/%s from host %s on query bin connection.",
-					type, data_bin_type_names( type ), h->name );
-				h->flags |= HOST_CLOSE;
+					type, data_bin_type_names( type ), h->net->name );
+				h->net->flags |= HOST_CLOSE;
 				return NULL;
 			}
 
@@ -411,7 +428,7 @@ QUERY *query_bin_read( HOST *h )
 				if( q->rtype <= C3DB_REQ_INVLD || q->rtype >= C3DB_REQ_END )
 				{
 					qwarn( "Invalid metric %d in query from host %s",
-						q->rtype, h->name );
+						q->rtype, h->net->name );
 					mem_free_query( &q );
 					continue;
 				}
@@ -427,7 +444,7 @@ QUERY *query_bin_read( HOST *h )
 					q->end = (time_t) ctl->curr_time;
 				else if( q->end < q->start )
 				{
-					qwarn( "End < start in query from host %s", h->name );
+					qwarn( "End < start in query from host %s", h->net->name );
 					mem_free_query( &q );
 					continue;
 				}
@@ -478,12 +495,12 @@ QUERY *query_line_read( HOST *h )
 			len = h->all->len[i];
 
 			qdebug( "Received query from host %s: (%d) %s",
-				h->name, len, wd );
+				h->net->name, len, wd );
 
 			// we have very variable requirements here
 			if( strwords( h->val, wd, len, FIELD_SEPARATOR ) < QUERY_FIELD_COUNT )
 			{
-				qinfo( "Invalid line from query host %s", h->name );
+				qinfo( "Invalid line from query host %s", h->net->name );
 				continue;
 			}
 
@@ -516,7 +533,7 @@ QUERY *query_line_read( HOST *h )
 					// an informal way of saying 'now'
 					q->end = (time_t) ctl->curr_time;
 				} else if( q->end < q->start ) {
-					qwarn( "End < start in query from host %s", h->name );
+					qwarn( "End < start in query from host %s", h->net->name );
 					mem_free_query( &q );
 					continue;
 				}
@@ -527,7 +544,7 @@ QUERY *query_line_read( HOST *h )
 			if( ( !q->tree && q->rtype == C3DB_REQ_INVLD )
 			 || q->format == QUERY_FMT_INVALID )
 			{
-				qwarn( "Invalid type or format from host %s", h->name );
+				qwarn( "Invalid type or format from host %s", h->net->name );
 				mem_free_query( &q );
 				continue;
 			}
@@ -536,7 +553,7 @@ QUERY *query_line_read( HOST *h )
 			if( q->format == QUERY_FMT_BIN )
 			{
 				qwarn( "Asked for binary format query answer on a line format connection from host %s",
-					h->name );
+					h->net->name );
 				mem_free_query( &q );
 				continue;
 			}
@@ -647,7 +664,7 @@ void query_bin_connection( HOST *h )
 	QUERY *list, *q;
 	int rv;
 
-	p.fd     = h->fd;
+	p.fd     = h->net->sock;
 	p.events = POLL_EVENTS;
 
 	while( ctl->run_flags & RUN_LOOP )
@@ -657,8 +674,8 @@ void query_bin_connection( HOST *h )
 			if( errno != EINTR )
 			{
 				qwarn( "Error polling query connection from %s -- %s",
-						h->name, Err );
-				h->flags |= HOST_CLOSE;
+						h->net->name, Err );
+				h->net->flags |= HOST_CLOSE;
 				break;
 			}
 			continue;
@@ -669,7 +686,7 @@ void query_bin_connection( HOST *h )
 		// we what we have
 		if( !( list = query_line_read( h ) ) )
 		{
-			if( h->flags & HOST_CLOSE )
+			if( h->net->flags & HOST_CLOSE )
 				break;
 
 			continue;
@@ -695,7 +712,7 @@ void query_bin_connection( HOST *h )
 		}
 
 		// error?
-		if( h->flags & HOST_CLOSE )
+		if( h->net->flags & HOST_CLOSE )
 			break;
 	}
 }
@@ -707,7 +724,7 @@ void query_line_connection( HOST *h )
 	QUERY *list, *q;
 	int rv;
 
-	p.fd     = h->fd;
+	p.fd     = h->net->sock;
 	p.events = POLL_EVENTS;
 
 	while( ctl->run_flags & RUN_LOOP )
@@ -717,8 +734,8 @@ void query_line_connection( HOST *h )
 			if( errno != EINTR )
 			{
 				qwarn( "Error polling query connection from %s -- %s",
-						h->name, Err );
-				h->flags |= HOST_CLOSE;
+						h->net->name, Err );
+				h->net->flags |= HOST_CLOSE;
 				break;
 			}
 			continue;
@@ -729,7 +746,7 @@ void query_line_connection( HOST *h )
 		// we what we have
 		if( !( list = query_line_read( h ) ) )
 		{
-			if( h->flags & HOST_CLOSE )
+			if( h->net->flags & HOST_CLOSE )
 				break;
 
 			continue;
@@ -755,7 +772,7 @@ void query_line_connection( HOST *h )
 		}
 
 		// error?
-		if( h->flags & HOST_CLOSE )
+		if( h->net->flags & HOST_CLOSE )
 			break;
 	}
 }
@@ -770,7 +787,7 @@ void *query_connection( void *arg )
 	t = (THRD *) arg;
 	h = (HOST *) t->arg;
 
-	info( "Accepted query connection from host %s", h->name );
+	info( "Accepted query connection from host %s", h->net->name );
 
 	switch( h->type )
 	{
@@ -783,11 +800,11 @@ void *query_connection( void *arg )
 	}
 
 	// all done
-	if( shutdown( h->fd, SHUT_RDWR ) )
+	if( shutdown( h->net->sock, SHUT_RDWR ) )
 		qerr( "Shutdown error on host %s -- %s",
-			h->name, Err );
-	close( h->fd );
-	h->fd = -1;
+			h->net->name, Err );
+	close( h->net->sock );
+	h->net->sock = -1;
 	mem_free_host( &h );
 
 	free( t );

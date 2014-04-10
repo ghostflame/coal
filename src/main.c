@@ -34,8 +34,10 @@ void shut_down( int exval )
 		ctl->curr_time - ctl->start_time );
 
 	net_stop( );
+	relay_stop( );
 
 	info( "Waiting for all threads to stop." );
+
 
 	// wait a maximum of 30 seconds
 	i = 0;
@@ -166,6 +168,9 @@ int main( int ac, char **av )
 
 	if( net_start( ) )
 		fatal( "Failed to start networking." );
+
+	if( relay_start( ) )
+		fatal( "Failed to start relay connections." );
 
 	if( set_signals( ) )
 		fatal( "Failed to set signalling." );

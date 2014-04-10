@@ -19,14 +19,96 @@ HOST *net_get_host( int sock, int type )
 	snprintf( buf, 32, "%s:%hu", inet_ntoa( from.sin_addr ),
 		ntohs( from.sin_port ) );
 
-	h		= mem_new_host( );
-	h->fd   = d;
-	h->type = type;
-	h->peer = from;
-	h->name = strdup( buf );
+	h            = mem_new_host( );
+	h->type      = type;
+	h->peer      = from;
+	h->net->name = strdup( buf );
+	h->net->sock = d;
 
 	return h;
 }
+
+
+NSOCK *net_make_sock( int insz, int outsz, char *name, struct sockaddr_in *peer )
+{
+	NSOCK *ns;
+
+	ns = (NSOCK *) allocz( sizeof( NSOCK ) );
+	if( name )
+		ns->name = strdup( name );
+	ns->peer = peer;
+
+	if( insz )
+	{
+		ns->in.sz    = insz;
+		ns->in.buf   = (unsigned char *) allocz( insz );
+		// you can fiddle with these if you like
+		ns->in.hwmk  = ns->in.buf + ( ( 5 * insz ) / 6 );
+	}
+
+	if( outsz )
+	{
+		ns->out.sz   = outsz;
+		ns->out.buf  = (unsigned char *) allocz( outsz );
+		// you can fiddle with these if you like
+		ns->out.hwmk = ns->out.buf + ( ( 5 * outsz ) / 6 );
+	}
+
+	return ns;
+}
+
+
+int net_connect( NSOCK *s )
+{
+	int opt = 1;
+	char *label;
+
+	if( s->sock != -1 )
+	{
+		shutdown( s->sock, SHUT_RDWR );
+		close( s->sock );
+		s->sock = -1;
+	}
+
+	if( !s->name || !*(s->name) )
+		label = "unknown socket";
+	else
+		label = s->name;
+
+	if( ( s->sock = socket( AF_INET, SOCK_STREAM, 0 ) ) < 0 )
+	{
+		err( "Unable to make tcp socket for %s -- %s",
+			label, Err );
+		return -1;
+	}
+
+	if( setsockopt( s->sock, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof( int ) ) )
+	{
+		err( "Unable to set keepalive on socket for %s -- %s",
+			label, Err );
+		close( s->sock );
+		s->sock = -1;
+		return -1;
+	}
+
+	if( connect( s->sock, s->peer, sizeof( struct sockaddr_in ) ) < 0 )
+	{
+		err( "Unable to connect to %s:%hu for %s -- %s",
+			inet_ntoa( s->peer->sin_addr ), ntohs( s->peer->sin_port ),
+			label, Err );
+		close( s->sock );
+		s->sock = -1;
+		return -1;
+	}
+
+	info( "Connected (%d) to remote host %s:%hu for %s.",
+		s->sock, inet_ntoa( s->peer->sin_addr ),
+		ntohs( s->peer->sin_port ), label );
+
+	return s->sock;
+}
+
+
 
 
 int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog )
@@ -85,88 +167,92 @@ int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog )
 }
 
 
-
-
-int net_write_data( HOST *h )
+int net_write_data( NSOCK *s )
 {
 	unsigned char *ptr;
+	int rv, b, tries;
 	struct pollfd p;
-	int rv, b;
 
-	p.fd     = h->fd;
+	p.fd     = s->sock;
 	p.events = POLLOUT;
+	tries    = 3;
+	ptr      = s->out.buf;
 
-	ptr = h->outbuf;
-
-	while( h->outlen > 0 )
+	while( s->out.len > 0 )
 	{
 		if( ( rv = poll( &p, 1, 20 ) ) < 0 )
 		{
 			warn( "Poll error writing to host %s -- %s",
-				h->name, Err );
-			h->flags |= HOST_CLOSE;
+				s->name, Err );
+			s->flags |= HOST_CLOSE;
 			return -1;
 		}
 
 		if( !rv )
+		{
+			// wait another 20msec and try again
+			if( tries-- > 0 )
+				continue;
+
 			// we cannot write just yet
 			return 0;
+		}
 
-		if( ( b = send( h->fd, ptr, h->outlen, 0 ) ) < 0 )
+		if( ( b = send( s->sock, ptr, s->out.len, 0 ) ) < 0 )
 		{
 			warn( "Error writing to host %s -- %s",
-				h->name, Err );
-			h->flags |= HOST_CLOSE;
+				s->name, Err );
+			s->flags |= HOST_CLOSE;
 			return -2;
 		}
 
-		h->outlen -= b;
-		ptr       += b;
+		s->out.len -= b;
+		ptr        += b;
 	}
 
 	// weirdness
-	if( h->outlen < 0 )
-		h->outlen = 0;
+	if( s->out.len < 0 )
+		s->out.len = 0;
 
 	// what we wrote
-	return ptr - h->outbuf;
+	return ptr - s->out.buf;
 }
 
 
 
-int net_read_data( HOST *h )
+int net_read_data( NSOCK *s )
 {
 	int i;
 
-	if( h->keepLen )
+	if( s->keep.len )
 	{
 	  	// can we shift the kept string
-		if( ( h->keep - h->inbuf ) >= h->keepLen )
-			memcpy( h->inbuf, h->keep, h->keepLen );
+		if( ( s->keep.buf - s->in.buf ) >= s->keep.len )
+			memcpy( s->in.buf, s->keep.buf, s->keep.len );
 		else
 		{
 			// no, we can't
 			unsigned char *p, *q;
 
-			i = h->keepLen;
-			p = h->inbuf;
-			q = h->keep;
+			i = s->keep.len;
+			p = s->in.buf;
+			q = s->keep.buf;
 
 			while( i-- > 0 )
 				*p++ = *q++;
 		}
 
-		h->inlen   = h->keepLen;
-		h->keep    = NULL;
-		h->keepLen = 0;
+		s->keep.buf = NULL;
+		s->in.len   = s->keep.len;
+		s->keep.len = 0;
 	}
 	else
-		h->inlen = 0;
+		s->in.len = 0;
 
-	if( !( i = recv( h->fd, h->inbuf + h->inlen, MAX_PKT_IN, MSG_DONTWAIT ) ) )
+	if( !( i = recv( s->sock, s->in.buf + s->in.len, s->in.sz - ( s->in.len + 2 ), MSG_DONTWAIT ) ) )
 	{
 	  	// that would be the fin, then
-		h->flags |= HOST_CLOSE;
+		s->flags |= HOST_CLOSE;
 		return 0;
 	}
 	else if( i < 0 )
@@ -175,15 +261,15 @@ int net_read_data( HOST *h )
 		 && errno != EWOULDBLOCK )
 		{
 			err( "Recv error for host %s -- %s",
-				h->name, Err );
-			h->flags |= HOST_CLOSE;
+				s->name, Err );
+			s->flags |= HOST_CLOSE;
 			return 0;
 		}
 		return i;
 	}
 
 	// got some data then
-	h->inlen += i;
+	s->in.len += i;
 
 	return i;
 }
@@ -193,20 +279,21 @@ int net_read_data( HOST *h )
 // to our data structures
 int net_read_bin( HOST *h )
 {
+	int i, l, ver, sz, rdsz;
 	unsigned char *start;
-	int i, l, ver, sz;
+	NSOCK *n = h->net;
 
 	// try to read some more data
-	if( ( i = net_read_data( h ) ) <= 0 )
+	if( ( i = net_read_data( n ) ) <= 0 )
 		return i;
 
 	// anything to handle?
-	if( !h->inlen )
+	if( !n->in.len )
 		return 0;
 
 	// we'll chew through this data lump by lump
-	l     = h->inlen;
-	start = h->inbuf;
+	l     = n->in.len;
+	start = n->in.buf;
 	memset( h->all, 0, sizeof( WORDS ) );
 
 	// break the buffer up into our binary chunks
@@ -215,8 +302,8 @@ int net_read_bin( HOST *h )
 		// do we have a full start structure?
 		if( l < 4 )
 		{
-			h->keep    = start;
-			h->keepLen = l;
+			n->keep.buf = start;
+			n->keep.len = l;
 
 			return h->all->wc;
 		}
@@ -228,20 +315,22 @@ int net_read_bin( HOST *h )
 		if( ver != 1 )
 		{
 			warn( "Invalid version (%d) from host %s.",
-				ver, h->name );
-			h->flags |= HOST_CLOSE;
+				ver, n->name );
+			n->flags |= HOST_CLOSE;
 			return h->all->wc;
 		}
 
 		// read the record size
-		sz = (int) *((uint16_t *) ( start + 2 ));
+		sz   = (int) *((uint16_t *) ( start + 2 ));
+		// but we have the read up to an alignment boundary
+		rdsz = ( sz % 4 ) ? sz + 4 - ( sz % 4 ) : sz;
 
 		// do we have a full record?
-		if( l < sz )
+		if( l < rdsz )
 		{
 			// no
-			h->keep    = start;
-			h->keepLen = l;
+			n->keep.buf = start;
+			n->keep.len = l;
 
 			return h->all->wc;
 		}
@@ -253,8 +342,8 @@ int net_read_bin( HOST *h )
 		h->all->wc++;
 
 		// and move one
-		start += sz;
-		l     -= sz;
+		start += rdsz;
+		l     -= rdsz;
 	}
 
 	return h->all->wc;
@@ -265,26 +354,27 @@ int net_read_bin( HOST *h )
 int net_read_lines( HOST *h )
 {
 	int i, keeplast = 0, l;
+	NSOCK *n = h->net;
 	char *w;
 
 	// try to read some data
-	if( ( i = net_read_data( h ) ) <= 0 )
+	if( ( i = net_read_data( n ) ) <= 0 )
 		return i;
 
 	// do we have anything at all?
-	if( !h->inlen )
+	if( !n->in.len )
 		return 0;
 
-	if( h->inbuf[h->inlen - 1] == LINE_SEPARATOR )
+	if( n->in.buf[n->in.len - 1] == LINE_SEPARATOR )
 		// remove any trailing separator
-		h->inbuf[--(h->inlen)] = '\0';
+		n->in.buf[--(n->in.len)] = '\0';
 	else
 	 	// make a note to keep the last line back
 		keeplast = 1;
 
-	if( strwords( h->all, (char *) h->inbuf, h->inlen, LINE_SEPARATOR ) < 0 )
+	if( strwords( h->all, (char *) n->in.buf, n->in.len, LINE_SEPARATOR ) < 0 )
 	{
-		debug( "Invalid buffer from data host %s.", h->name );
+		debug( "Invalid buffer from data host %s.", n->name );
 		return -1;
 	}
 
@@ -316,15 +406,15 @@ int net_read_lines( HOST *h )
 		if( --(h->all->wc) )
 		{
 			// move it next time
-			h->keep    = (unsigned char *) h->all->wd[h->all->wc];
-			h->keepLen = h->all->len[h->all->wc];
+			n->keep.buf = (unsigned char *) h->all->wd[h->all->wc];
+			n->keep.len = h->all->len[h->all->wc];
 		}
 		else
 		{
 			// it's the only line
-			h->inlen   = h->all->len[0];
-			h->keep    = NULL;
-			h->keepLen = 0;
+			n->in.len   = h->all->len[0];
+			n->keep.buf = NULL;
+			n->keep.len = 0;
 		}
 	}
 
@@ -412,29 +502,29 @@ NET_CTL *net_config_defaults( void )
 
 	net                     = (NET_CTL *) allocz( sizeof( NET_CTL ) );
 
-	net->line                = (NET_TYPE_CTL *) allocz( sizeof( NET_TYPE_CTL ) );
-	net->line->data          = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
-	net->line->data->label   = strdup( "line data" );
-	net->line->data->port    = DEFAULT_NET_LINE_DATA_PORT;
-	net->line->data->sock    = -1;
-	net->line->query         = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
-	net->line->query->label  = strdup( "line queries" );
-	net->line->query->port   = DEFAULT_NET_LINE_QUERY_PORT;
-	net->line->query->sock   = -1;
-	net->line->type          = NET_COMM_LINE;
-	net->line->enabled       = DEFAULT_NET_LINE_ENABLED;
+	net->line               = (NET_TYPE_CTL *) allocz( sizeof( NET_TYPE_CTL ) );
+	net->line->data         = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
+	net->line->data->label  = strdup( "line data" );
+	net->line->data->port   = DEFAULT_NET_LINE_DATA_PORT;
+	net->line->data->sock   = -1;
+	net->line->query        = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
+	net->line->query->label = strdup( "line queries" );
+	net->line->query->port  = DEFAULT_NET_LINE_QUERY_PORT;
+	net->line->query->sock  = -1;
+	net->line->type         = NET_COMM_LINE;
+	net->line->enabled      = DEFAULT_NET_LINE_ENABLED;
 
-	net->bin                 = (NET_TYPE_CTL *) allocz( sizeof( NET_TYPE_CTL ) );
-	net->bin->data           = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
-	net->bin->data->label    = strdup( "binary data" );
-	net->bin->data->port     = DEFAULT_NET_BIN_DATA_PORT;
-	net->bin->data->sock     = -1;
-	net->bin->query          = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
-	net->bin->query->label   = strdup( "binary queries" );
-	net->bin->query->port    = DEFAULT_NET_BIN_QUERY_PORT;
-	net->bin->query->sock    = -1;
-	net->bin->type           = NET_COMM_BIN;
-	net->bin->enabled        = DEFAULT_NET_BIN_ENABLED;
+	net->bin                = (NET_TYPE_CTL *) allocz( sizeof( NET_TYPE_CTL ) );
+	net->bin->data          = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
+	net->bin->data->label   = strdup( "binary data" );
+	net->bin->data->port    = DEFAULT_NET_BIN_DATA_PORT;
+	net->bin->data->sock    = -1;
+	net->bin->query         = (PORT_CTL *) allocz( sizeof( PORT_CTL ) );
+	net->bin->query->label  = strdup( "binary queries" );
+	net->bin->query->port   = DEFAULT_NET_BIN_QUERY_PORT;
+	net->bin->query->sock   = -1;
+	net->bin->type          = NET_COMM_BIN;
+	net->bin->enabled       = DEFAULT_NET_BIN_ENABLED;
 
 	return net;
 }

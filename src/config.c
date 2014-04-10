@@ -263,6 +263,7 @@ int config_check_relay( void )
 			if( !strcasecmp( n->relay, d->name ) )
 			{
 				n->dest = d;
+
 				debug( "Routing block '%s' matched to destination '%s'",
 					n->name, d->name );
 				break;

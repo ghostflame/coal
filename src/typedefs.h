@@ -21,6 +21,8 @@ typedef struct config_context 		CCTXT;
 typedef struct data_point 			POINT;
 typedef struct log_file    			LOG_FILE;
 typedef struct query_data			QUERY;
+typedef struct net_buffer			NBUF;
+typedef struct net_socket			NSOCK;
 typedef struct host_data			HOST;
 typedef struct node_routing			NODE_ROUTE;
 typedef struct node_data			NODE;
@@ -30,7 +32,8 @@ typedef struct thread_data			THRD;
 typedef struct words_data			WORDS;
 typedef struct av_pair				AVP;
 typedef struct relay_destination	RDEST;
-typedef struct relay_connection		RCONN;
+typedef struct relay_data_conn		RDCONN;
+typedef struct relay_query_conn		RQCONN;
 
 // stats structures
 typedef struct data_stats_data		DSTATS;

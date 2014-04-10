@@ -35,6 +35,10 @@ void loop_run( void )
 		thread_throw( query_loop, ctl->net->bin );		// query.c
 	}
 
+	// are we relaying?
+	if( ctl->relay->dcount )
+		thread_throw( relay_loop, NULL );
+
 	while( ctl->run_flags & RUN_LOOP )
 	{
 		// get an accurate time

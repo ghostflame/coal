@@ -2,13 +2,6 @@
 #define COAL_DATA_H
 
 
-#define BINF_TYPE_DATA					0x01
-#define BINF_TYPE_QUERY					0x08
-#define BINF_TYPE_QUERY_RET				0x09
-#define BINF_TYPE_TREE					0x10
-#define BINF_TYPE_TREE_RET				0x11
-
-
 
 
 #define	LINE_SEPARATOR					'\n'

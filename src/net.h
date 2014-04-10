@@ -1,20 +1,18 @@
 #ifndef COAL_NETWORK_H
 #define COAL_NETWORK_H
 
-
-#define DEFAULT_NET_LINE_DATA_PORT		3801
-#define DEFAULT_NET_LINE_QUERY_PORT		3802
+// some of these live in libcoal.h
+#define DEFAULT_NET_LINE_DATA_PORT		COAL_LINE_DATA_PORT
+#define DEFAULT_NET_LINE_QUERY_PORT		COAL_LINE_QUERY_PORT
 #define DEFAULT_NET_LINE_ENABLED		1
 
-#define DEFAULT_NET_BIN_DATA_PORT		3811
-#define DEFAULT_NET_BIN_QUERY_PORT		3812
+#define DEFAULT_NET_BIN_DATA_PORT		COAL_BIN_DATA_PORT
+#define DEFAULT_NET_BIN_QUERY_PORT		COAL_BIN_QUERY_PORT
 #define DEFAULT_NET_BIN_ENABLED			0
 
 #define POLL_EVENTS						(POLLIN|POLLPRI|POLLRDNORM|POLLRDBAND)
 
-#define	MAX_PKT_IN						8192
-#define MAX_PKT_OUT						1450	// tcp max seg, ish
-
+#define COAL_NETBUF_SZ					0x1000	// 64k
 
 #define HOST_CLOSE						0x01
 #define HOST_NEW						0x02
@@ -59,41 +57,54 @@ struct network_control
 };
 
 
+struct net_buffer
+{
+	unsigned char		*	buf;
+	unsigned char		*	hwmk;
+	int						len;
+	int						sz;
+};
+
+
+// socket for talking to a host
+struct net_socket
+{
+	NBUF					out;
+	NBUF					in;
+	// this one has no buffer allocation
+	NBUF					keep;
+
+	int						sock;
+	int						flags;
+
+	struct sockaddr_in	*	peer;
+	char				*	name;
+};
+
 
 
 struct host_data
 {
 	HOST				*	next;
+	NSOCK				*	net;
 
 	struct sockaddr_in		peer;
-	char				*	name;
-	int						fd;
-	int						flags;  // close, new
-
-	unsigned char		*	inbuf;
-	unsigned char		*	outbuf;
-
-	unsigned char		*	keep;	// data held over
-	int						keepLen;
 
 	int						type;	// line or bin
-
-	unsigned short			inlen;	// size of incoming
-	unsigned short			outlen;	// size of outgoing
-
 	unsigned long			points;	// counter
 
 	WORDS				*	all;	// each line
 	WORDS				*	val;	// per line
 };
 
-
+NSOCK *net_make_sock( int insz, int outsz, char *name, struct sockaddr_in *peer );
 HOST *net_get_host( int sock, int type );
 int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog );
+int net_connect( NSOCK *s );
 
 // r/w
-int net_write_data( HOST *h );
-int net_read_data( HOST *h );
+int net_write_data( NSOCK *s );
+int net_read_data( NSOCK *s );
 int net_read_bin( HOST *h );
 int net_read_lines( HOST *h );
 

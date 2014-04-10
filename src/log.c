@@ -42,6 +42,7 @@ int log_get_level( char *str )
 }
 
 
+
 int log_write_ts( char *to, int len )
 {
 	char tbuf[64];
@@ -85,27 +86,28 @@ int log_line( int dest, int level, const char *file, const int line,
 		{
 			case LOG_DEST_QUERY:
 				lf = &(ctl->log->query);
-				fd = lf->fd;
 				break;
 			case LOG_DEST_NODE:
 				lf = &(ctl->log->node);
-				fd = lf->fd;
+				break;
+			case LOG_DEST_RELAY:
+				lf = &(ctl->log->relay);
 				break;
 			default:
 				lf = &(ctl->log->main);
-				fd = lf->fd;
 				break;
 		}
 
 		// are we logging this deeply?
 		if( level > lf->level )
 			return 0;
+
+		fd = lf->fd;
 	}
 
 	// can we write?
 	if( fd < 0 )
 		return -1;
-
 
 	// write the predictable parts
 	l  = log_write_ts( buf, LOG_LINE_MAX );
@@ -180,6 +182,7 @@ int log_close( void )
 		__log_close( &(ctl->log->main) );
 		__log_close( &(ctl->log->node) );
 		__log_close( &(ctl->log->query) );
+		__log_close( &(ctl->log->relay) );
 	}
 
 	return 0;
@@ -195,6 +198,7 @@ void log_reopen( int sig )
 		ret += __log_open( &(ctl->log->main) );
 		ret += __log_open( &(ctl->log->node) );
 		ret += __log_open( &(ctl->log->query) );
+		ret += __log_open( &(ctl->log->relay) );
 	}
 
 	if( ret )
@@ -202,21 +206,25 @@ void log_reopen( int sig )
 }
 
 
+
 int log_start( void )
 {
 	int ret = 0;
 
-	if( ctl && ctl->log )
-	{
-		ret += __log_open( &(ctl->log->main) );
-		notice( "Coal logging started." );
+	if( !ctl || !ctl->log )
+		return -1;
 
-		ret += __log_open( &(ctl->log->query) );
-		qnotice( "Coal query logging started." );
+	ret += __log_open( &(ctl->log->main) );
+	notice( "Coal logging started." );
 
-		ret += __log_open( &(ctl->log->node) );
-		nnotice( "Coal node logging started." );
-	}
+	ret += __log_open( &(ctl->log->query) );
+	qnotice( "Coal query logging started." );
+
+	ret += __log_open( &(ctl->log->node) );
+	nnotice( "Coal node logging started." );
+
+	ret += __log_open( &(ctl->log->relay) );
+	rnotice( "Coal relay logging started." );
 
 	return ret;
 }
@@ -239,6 +247,10 @@ LOG_CTL *log_config_defaults( void )
 	l->query.filename = strdup( DEFAULT_LOG_QUERY );
 	l->query.level    = LOG_LEVEL_NOTICE;
 	l->query.fd       = fileno( stderr );
+
+	l->relay.filename = strdup( DEFAULT_LOG_RELAY );
+	l->relay.level    = LOG_LEVEL_NOTICE;
+	l->relay.fd       = fileno( stderr );
 
 	return l;
 }
@@ -274,13 +286,20 @@ int log_config_line( AVP *av )
 			list[0] = &(ctl->log->node);
 			llen = 1;
 			break;
+		case 'r':
+			if( strncasecmp( av->att, "relay.", 6 ) )
+				return -1;
+			list[0] = &(ctl->log->relay);
+			llen = 1;
+			break;
 		case 'a':
 			if( strncasecmp( av->att, "all.", 4 ) )
 				return -1;
 			list[0] = &(ctl->log->main);
 			list[1] = &(ctl->log->query);
 			list[2] = &(ctl->log->node);
-			llen = 3;
+			list[3] = &(ctl->log->relay);
+			llen = 4;
 			break;
 		default:
 			return -1;

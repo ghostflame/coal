@@ -12,6 +12,10 @@ Offsets are to nearest byte, sizes are in bytes or :bits
 All paths are written with a \0 on the end, for ease of copying to buffers.
 String length is quoted length - 1
 
+All data chunks are 4-byte aligned - to allow sequential sets to be read in
+one buffer, all comms have 4-byte alignment padding on the end.
+
+
 
 Binary Data Format
 ==================
@@ -25,10 +29,12 @@ Offset   Size     Field
 4        4        (time_t) timestamp
 8        4        (float) value
 12		 var      Path (length = record size - 12, capped at 1024)
+var      0-3      Padding for 4-byte alignment
 
 Output:
 
 None
+
 
 
 Binary Query Format
@@ -44,6 +50,7 @@ Offset   Size     Field
 8        4        End time (ignored in tree queries)
 12       1        Metric (ignored in tree queries)
 13       var      Path (length = record size - 13, capped at 1024)
+var      0-3      Padding for 4-byte alignment
 
 
 Output (tree query):
@@ -55,22 +62,28 @@ Offset   Size     Field
 4        4        Record size
 8        1        Requested node type (1 = leaf, 2 = branch)
 9        1        Padding
-10        2        Result count (which we'll call N)
-<N times, starting offset X = 12>
-X+4i     1        Node type (1 = leaf, 2 = branch)
-X+1+4i   1        Padding
-X+2+4i   2        Path length (capped at 1024)
+10       2        Result count (which we'll call N)
+<i = 1 to N times>
+12+4i    1        Node type (1 = leaf, 2 = branch)
+13+4i    1        Padding
+14+4i    2        Path length (capped at 1024)
 ...
-<i = 0 to N-1 times, starting offset X = 12 + 4i, len being sum of path lengths to i>
+<i = 1 to N times, starting offset X = 12 + 4N, len being sum of path lengths to i>
 X+(len)  var      Path
 ...
+var      0-3      Padding for 4-byte alignment
+
+
+
 
 For example (numeric values are hex, leading zeros of single bytes are
 left off, ASCII characters are shown)
 
     00 . . . . . . .08 . . . . . . .10 . . . . . . .18 . . . . . . .20
 01   1 3 027 2 0 003 2 0 003 2 0 006 1 0 008 f o o\0 s u b d i r\0 d a
-02   t a p a t h\0
+02   t a p a t h\0\0
+
+Note the final \0 byte for 4-byte alignment.
 
 
 Output (data query):
@@ -86,10 +99,13 @@ Offset   Size     Field
 17       1        Padding
 18       2        Path length
 20       4        Result count (which we'll call N)
-<i = 0 to N-1 times, starting offset X = 24)
-X+12i    4        (time_t) timestamp
-X+4+12i  4        Flags ( 0x1 : valid )
-X+8+12i  4        (float) value
+<i = 1 to N times>
+24+12i   4        (time_t) timestamp
+28+12i   4        Flags ( 0x1 : valid )
+32+12i   4        (float) value
 ...
-24+12i    var      Path
+24+12N   var      Path
+var      0-3      Padding for 4-byte alignment
+
+
 
