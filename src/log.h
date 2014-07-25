@@ -47,6 +47,7 @@ struct log_control
 	LOG_FILE			query;
 	LOG_FILE			node;
 	LOG_FILE			relay;
+	int					force_stdout;
 };
 
 

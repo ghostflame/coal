@@ -54,6 +54,9 @@ NSOCK *net_make_sock( int insz, int outsz, char *name, struct sockaddr_in *peer 
 		ns->out.hwmk = ns->out.buf + ( ( 5 * outsz ) / 6 );
 	}
 
+	// no socket yet
+	ns->sock = -1;
+
 	return ns;
 }
 
@@ -65,6 +68,7 @@ int net_connect( NSOCK *s )
 
 	if( s->sock != -1 )
 	{
+		warn( "Net connect called on connected socket - disconnecting." );
 		shutdown( s->sock, SHUT_RDWR );
 		close( s->sock );
 		s->sock = -1;
@@ -214,6 +218,8 @@ int net_write_data( NSOCK *s )
 	if( s->out.len < 0 )
 		s->out.len = 0;
 
+	//debug( "Wrote to %d bytes to %d/%s", ( ptr - s->out.buf ), s->sock, s->name );
+
 	// what we wrote
 	return ptr - s->out.buf;
 }
@@ -270,6 +276,8 @@ int net_read_data( NSOCK *s )
 
 	// got some data then
 	s->in.len += i;
+
+	//debug( "Received %d bytes on socket %d/%s", i, s->sock, s->name );
 
 	return i;
 }
@@ -544,7 +552,7 @@ int net_config_line( AVP *av )
 	if( !strncasecmp( av->att, "line.", 5 ) )
 		ntc = ctl->net->line;
 	else if( !strncasecmp( av->att, "bin.", 4 ) )
-		ntc = ctl->net->line;
+		ntc = ctl->net->bin;
 	else
 		return -1;
 

@@ -43,6 +43,16 @@ int data_path_parse( PATH *p )
 }
 
 
+// check what to do with a point
+void data_point_to_node( NODE *n, POINT *p )
+{
+	if( n->flags & NODE_FLAG_RELAY )
+	  	relay_add_point( n->policy->dest, p );
+	else
+		node_add_point( n, p );
+}
+
+
 
 void data_point( POINT *p, PATH *path, NODE *parent )
 {
@@ -68,7 +78,7 @@ void data_point( POINT *p, PATH *path, NODE *parent )
 			mem_free_point( &p );
 		else if( leaf )
 			// shouldn't happen much with pcache
-			node_add_point( n, p );
+		  	data_point_to_node( n, p );
 		else
 			data_point( p, path, n );
 
@@ -81,7 +91,7 @@ void data_point( POINT *p, PATH *path, NODE *parent )
 
 	// so either add the node, or move on
 	if( leaf )
-		node_add_point( n, p );
+		data_point_to_node( n, p );
 	else
 		data_point( p, path, n );
 }
@@ -330,6 +340,10 @@ void data_bin_connection( HOST *h )
 		else if( !rv )
 			continue;
 
+		// are they going away?
+		if( p.revents & POLLHUP )
+			break;
+
 		if( ( vals = data_bin_fetch( h ) ) )
 		{
 			for( pt = vals; pt->next; pt = pt->next )
@@ -447,6 +461,10 @@ void data_line_connection( HOST *h )
 		}
 		else if( !rv )
 			continue;
+
+		// are they going away?
+		if( p.revents & POLLHUP )
+		  	break;
 
 		if( ( vals = data_line_fetch( h ) ) )
 		{

@@ -44,5 +44,7 @@ typedef struct stats_data			STATS;
 
 // and function types
 typedef void * throw_fn ( void * );
+typedef void relay_fn ( NSOCK *, POINT * );
+
 
 #endif

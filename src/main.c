@@ -10,6 +10,7 @@ Options:\n\
  -c <file>      Select config file to use\n\
  -d             Daemonize into the background\n\
  -D             Switch on debug output (overrides config)\n\
+ -v             Verbose logging to console\n\
  -t             Just test the config is valid and exit\n\n\
 Coal is a graphite-alternative data storage engine.  It runs on very\n\
 similar lines, taking data points against dot-delimited paths and\n\
@@ -100,7 +101,7 @@ int main( int ac, char **av )
 	// make a control structure
 	ctl = create_config( );
 
-	while( ( oc = getopt( ac, av, "hDdtc:" ) ) != -1 )
+	while( ( oc = getopt( ac, av, "hDvdtc:" ) ) != -1 )
 		switch( oc )
 		{
 		  	case 'c':
@@ -115,6 +116,9 @@ int main( int ac, char **av )
 				ctl->log->query.level = LOG_LEVEL_DEBUG;
 				ctl->log->node.level  = LOG_LEVEL_DEBUG;
 				ctl->run_flags |= RUN_DEBUG;
+				break;
+			case 'v':
+				ctl->log->force_stdout = 1;
 				break;
 			case 't':
 				testConf = 1;
@@ -134,6 +138,8 @@ int main( int ac, char **av )
 	if( chdir( ctl->basedir ) )
 		fatal( "Unable to chdir to base dir '%s' -- %s",
 			ctl->basedir, Err );
+	else
+		debug( "Working directory switched to %s", ctl->basedir );
 
 	// match up relay rules against destinations
 	if( config_check_relay( ) ) {
@@ -150,13 +156,15 @@ int main( int ac, char **av )
 	pidfile_write( );
 
 	// open our log file and get going
-	debug( "Starting logging - no more logs to stderr." );
+	if( !ctl->log->force_stdout )
+		debug( "Starting logging - no more logs to stdout." );
+
 	log_start( );
 	notice( "Coal starting up." );
 
 	if( ctl->run_flags & RUN_DAEMON )
 	{
-		if( daemon( 0, 0 ) < 0 )
+		if( daemon( 1, 0 ) < 0 )
 		{
 			warn( "Unable to daemonize -- %s", Err );
 			fprintf( stderr, "Unable to daemonize -- %s", Err );
@@ -177,6 +185,7 @@ int main( int ac, char **av )
 
 	if( node_start_discovery( ) )
 		fatal( "Unable to begin looking for existing nodes." );
+
 	info( "Discovered %u branch and %u leaf nodes.",
 		ctl->node->branches, ctl->node->leaves,
 		( ctl->node->node_id == 1 ) ? "" : "s" );

@@ -22,7 +22,6 @@ struct relay_query_conn
 
 
 
-
 // destination target
 struct relay_destination
 {
@@ -37,6 +36,9 @@ struct relay_destination
 
 	// data connection
 	NSOCK			*	data;
+
+	// relay writer function
+	relay_fn		*	rfun;
 
 	// query conns are not held here
 

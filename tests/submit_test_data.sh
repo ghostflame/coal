@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # defaults
-path='foo.bar'
+path='stats.foo.bar'
 ts=$(date +%s)
 data=0
 port=3801

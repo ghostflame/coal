@@ -27,18 +27,24 @@ COALH *libcoal_handle( char *host, int doData, int dport, int doQuery, int qport
 	h->data  = (COALCONN *) allocz( sizeof( COALCONN ) );
 	h->query = (COALCONN *) allocz( sizeof( COALCONN ) );
 
-	h->data->enabled      = ( doData ) ? 1 : 0;
 	h->data->to.sin_addr  = h->svr;
 	h->data->to.sin_port  = htons( h->dport );
-	h->data->outbuf       = (unsigned char *) allocz( OUTBUF_SZ );
-	h->data->hwmk         = h->data->outbuf + ( OUTBUF_SZ - 1072 );
+	if( doData )
+	{
+		h->data->enabled      = 1;
+		h->data->outbuf       = (unsigned char *) allocz( OUTBUF_SZ );
+		h->data->hwmk         = h->data->outbuf + ( OUTBUF_SZ - 1072 );
+	}
 
-	h->query->enabled     = ( doQuery ) ? 1 : 0;
 	h->query->to.sin_addr = h->svr;
 	h->query->to.sin_port = htons( h->qport );
-	h->query->outbuf      = (unsigned char *) allocz( OUTBUF_SZ );
-	h->query->hwmk        = h->query->outbuf + ( OUTBUF_SZ - 512 );
-	h->query->inbuf       = (unsigned char *) allocz( INBUF_SZ );
+	if( doQuery )
+	{
+	  	h->query->enabled     = 1;
+		h->query->outbuf      = (unsigned char *) allocz( OUTBUF_SZ );
+		h->query->hwmk        = h->query->outbuf + ( OUTBUF_SZ - 512 );
+		h->query->inbuf       = (unsigned char *) allocz( INBUF_SZ );
+	}
 
 	return h;
 }

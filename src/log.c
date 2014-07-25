@@ -73,9 +73,9 @@ int log_write_ts( char *to, int len )
 int log_line( int dest, int level, const char *file, const int line,
 				const char *fn, char *fmt, ... )
 {
+	int fd = 2, l = 0, tofile = 0;
   	char buf[LOG_LINE_MAX];
 	LOG_FILE *lf = NULL;
-	int fd = 2, l = 0;
 	va_list args;
 
 	// stderr if we aren't set up yet
@@ -103,6 +103,7 @@ int log_line( int dest, int level, const char *file, const int line,
 			return 0;
 
 		fd = lf->fd;
+		tofile = 1;
 	}
 
 	// can we write?
@@ -138,10 +139,20 @@ int log_line( int dest, int level, const char *file, const int line,
 		buf[l]   = '\0';
 	}
 
+
 	if( lf )
-		l = write( fd, buf, l );
+	{
+		// maybe always log to stdout?
+	  	if( ctl->log->force_stdout )
+			printf( "%s", buf );
+
+		// but write to log file
+		if( tofile > 0 )
+			l = write( fd, buf, l );
+	}
 	else
-	  	l = fprintf( stderr, "%s", buf );
+	  	// nowhere else to go...
+	  	l = printf( "%s", buf );
 
 	// FATAL never returns
 	if( level == LOG_LEVEL_FATAL )
@@ -251,6 +262,8 @@ LOG_CTL *log_config_defaults( void )
 	l->relay.filename = strdup( DEFAULT_LOG_RELAY );
 	l->relay.level    = LOG_LEVEL_NOTICE;
 	l->relay.fd       = fileno( stderr );
+	
+	l->force_stdout   = 0;
 
 	return l;
 }

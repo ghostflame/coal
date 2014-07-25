@@ -58,6 +58,7 @@ struct config_context
 
 int get_config( char *path );
 int config_check_relay( void );
+char *config_relative_path( char *inpath );
 COAL_CTL *create_config( void );
 
 

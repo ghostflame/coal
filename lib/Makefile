@@ -20,7 +20,7 @@ OBJS   = net.o data.o query.o init.o
 LIBDIR = /usr/lib
 INCDIR = /usr/include
 
-IFLAGS = -I. -I$(HDIR)
+IFLAGS = -I. -I$(HDIR) -I../../libc3db/include
 DFLAGS = -g -pg -ggdb3
 CFLAGS = $(IFLAGS) -fPIC -DPIC
 LFLAGS = -shared -fPIC -DPIC -Wl,-soname,$(LIB).$(MAXV)

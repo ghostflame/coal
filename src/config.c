@@ -141,7 +141,7 @@ int config_line( AVP *av )
 	else if( attIs( "pidfile" ) )
 	{
 		free( ctl->pidfile );
-		ctl->pidfile = strdup( av->val );
+		ctl->pidfile = config_relative_path( av->val );
 	}
 	else if( attIs( "basedir" ) )
 	{
@@ -152,18 +152,48 @@ int config_line( AVP *av )
 }
 
 
+// always returns a new string
+char *config_relative_path( char *inpath )
+{
+	char *ret;
+	int len;
+
+	if( *inpath != '~' )
+		return strdup( inpath );
+
+	if( !ctl->basedir )
+	  	// just step over it
+		return strdup( inpath + 1 );
+
+	// add 1 for the /, remove 1 for the ~, add 1 for the \0
+	len = strlen( ctl->basedir ) + strlen( inpath ) + 1;
+
+	ret = (char *) malloc( len );
+	snprintf( ret, len, "%s/%s", ctl->basedir, inpath + 1 );
+
+	return ret;
+}
+
+
+
+
 #define	secIs( s )		!strcasecmp( context->section, s )
 
-int get_config( char *path )
+int get_config( char *inpath )
 {
 	int ret = 0, rv, lrv;
 	FILE *fh = NULL;
+	char *path;
 	AVP av;
+
+	// maybe add basedir
+	path = config_relative_path( inpath );
 
 	// check this isn't a duplicate
 	if( config_file_dupe( ctxt_top, path ) )
 	{
 		warn( "Skipping duplicate config file '%s'.", path );
+		free( path );
 		return 0;
 	}
 
@@ -240,6 +270,7 @@ END_FILE:
 	// step our context back
 	context = context->parent;
 
+	free( path );
 	return ret;
 }
 

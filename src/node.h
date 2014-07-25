@@ -16,7 +16,7 @@
 #define NODE_FLAG_ERROR				0x04
 #define NODE_FLAG_CREATING			0x10
 #define NODE_FLAG_CREATED			0x20
-
+#define NODE_FLAG_RELAY				0x40
 
 
 

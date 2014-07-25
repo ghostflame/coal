@@ -1,6 +1,7 @@
 #include "coal.h"
 
 
+
 NODE_ROUTE *node_policy( char *str )
 {
 	NODE_ROUTE *nr;
@@ -22,7 +23,6 @@ NODE *node_create( char *name, int len, NODE *parent, PATH *p, int leaf )
 {
 	NODE *n, *pn;
 	double at;
-	int l;
 
 	n            = (NODE *) allocz( sizeof( NODE ) );
 	n->id        = ctl->node->node_id++;
@@ -38,48 +38,71 @@ NODE *node_create( char *name, int len, NODE *parent, PATH *p, int leaf )
 		n->dpath_len    += 1 + parent->dpath_len;
 	}
 
-	// databases get the extension
-	if( leaf )
-		n->dpath_len += 1 + C3DB_FILE_EXTN_LEN;
-
-	// make a new string space for the dir path
-	n->dir_path  = perm_str( n->dpath_len + 1 );
-	l = 0;
-
-	// prepend the parent path if there is one
-	if( parent )
-		l = snprintf( n->dir_path, n->dpath_len + 1, "%s/", parent->dir_path );
-
+	// may need a policy
 	if( leaf )
 	{
-		snprintf( n->dir_path + l, n->dpath_len + 1 - l, "%s.%s", name, C3DB_FILE_EXTN );
-
-		n->flags |= NODE_FLAG_LEAF;
-		ctl->node->count++;
-
-		if( !( n->policy = node_policy( n->dir_path + ctl->node->root_len + 1 ) ) )
+	  	// these are checked against the original string
+		if( !( n->policy = node_policy( p->str ) ) )
 		{
-			nerr( "Cannot pick a policy for node '%s'", n->dir_path );
+			nerr( "Cannot pick a policy for node '%s'", p->str );
 			n->flags |= NODE_FLAG_ERROR;
 		}
 		else
-			ndebug( "Node '%s' uses policy %s", n->dir_path, n->policy->name );
+		  	ndebug( "Node '%s' uses policy %s", p->str, n->policy->name );
 
-		// and create that
-		data_add_path_cache( p, n, NULL );
+		// is this a relay node?
+		if( n->policy->relay )
+		{
+		 	n->dir_path = perm_str( n->dpath_len + 1 );
 
-		ninfo( "New leaf node %u '%s', child of node %u",
-			n->id, n->dir_path, parent->id );
+			if( parent )
+			  	snprintf( n->dir_path, n->dpath_len + 1, "%s/%s", parent->dir_path, name );
+			else
+				snprintf( n->dir_path, n->dpath_len + 1, "%s", name );
+
+			n->flags |= NODE_FLAG_RELAY;
+
+			// create that as a relay cache
+			data_add_path_cache( p, NULL, n->policy->dest );
+
+			ninfo( "New relay node %u '%s', child of node %u",
+				n->id, n->dir_path, parent->id );
+		}
+		else
+		{
+			// databases get the extension
+		  	n->dpath_len += 1 + C3DB_FILE_EXTN_LEN;
+			n->dir_path   = perm_str( n->dpath_len + 1 );
+
+			if( parent )
+				snprintf( n->dir_path, n->dpath_len + 1, "%s/%s.%s", parent->dir_path, name, C3DB_FILE_EXTN );
+			else
+				snprintf( n->dir_path, n->dpath_len + 1, "%s.%s", name, C3DB_FILE_EXTN );
+
+			// create that as a node cache
+			data_add_path_cache( p, n, NULL );
+
+			ninfo( "New leaf node %u '%s', child of node %u",
+				n->id, n->dir_path, parent->id );
+		}
+
+		n->flags |= NODE_FLAG_LEAF;
+		ctl->node->count++;
 	}
 	else
 	{
-	 	snprintf( n->dir_path + l, n->dpath_len + 1 - l, "%s", name );
-
+	 	n->dir_path = perm_str( n->dpath_len + 1 );
 		if( parent )
+		{
+		  	snprintf( n->dir_path, n->dpath_len + 1, "%s/%s", parent->dir_path, name );
 			ninfo( "New branch node %u '%s', child of node %u",
 				n->id, n->dir_path, parent->id );
+		}
 		else
+		{
+	 		snprintf( n->dir_path, n->dpath_len + 1, "%s", name );
 			ninfo( "Created root node '%s'", n->dir_path );
+		}
 	}
 
 	// update the timestamps
@@ -115,6 +138,7 @@ void node_add_point( NODE *n, POINT *p )
 }
 
 
+
 int create_database( NODE *n )
 {
 	C3HDL *h;
@@ -126,6 +150,7 @@ int create_database( NODE *n )
 	{
 		nerr( "Could not create database '%s' -- %s",
 			n->dir_path, c3db_error( h ) );
+		ndebug( "Path '%s', retention '%s'", n->dir_path, n->policy->retain );
 		n->flags |= NODE_FLAG_ERROR;
 		c3db_close( h );
 		return -1;
@@ -236,7 +261,7 @@ int node_write_single( NODE *n )
 
 	// we saw no created flag, so test properly this time
 	node_lock( n );
-	if( n->flags & (NODE_FLAG_CREATED|NODE_FLAG_CREATING) )
+	if( n->flags & (NODE_FLAG_CREATED|NODE_FLAG_CREATING|NODE_FLAG_ERROR) )
 	{
 		node_unlock( n );
 		return 0;
@@ -285,6 +310,10 @@ int node_write_single( NODE *n )
 void node_write( NODE *n )
 {
 	NODE *ch;
+
+	// relay flag lives on relay leaf nodes - we're done here
+	if( n->flags & NODE_FLAG_RELAY )
+		return;
 
 	if( n->parent
 	 && !( n->parent->flags & NODE_FLAG_CREATED ) )
@@ -384,6 +413,23 @@ int node_read_dir( NODE *dn, regex_t *c3chk )
 }
 
 
+// they are backwards
+void node_sort_routings( void )
+{
+	NODE_ROUTE *list, *nr, *nr_next;
+
+	for( list = NULL, nr = ctl->node->policies; nr; nr = nr_next )
+	{
+		nr_next  = nr->next;
+		nr->next = list;
+		list     = nr;
+	}
+
+	ctl->node->policies = list;
+
+	for( nr = list; nr; nr = nr->next )
+		debug( "Routing policy order: %s", nr->name );
+}
 
 
 int node_start_discovery( void )
@@ -391,6 +437,9 @@ int node_start_discovery( void )
 	char buf[16], ebuf[128];
 	regex_t c3r;
 	int rv;
+
+	// nodes are backwards
+	node_sort_routings( );
 
 	ctl->node->pcache = (PCACHE **) allocz( ctl->node->pcache_sz * sizeof( PCACHE * ) );
 
@@ -452,8 +501,8 @@ int node_config_line( AVP *av )
 	else if( attIs( "rootdir" ) )
 	{
 		free( n->root );
-		n->root     = strdup( av->val );
-		n->root_len = av->vlen;
+		n->root     = config_relative_path( av->val );
+		n->root_len = strlen( n->root );
 	}
 	else
 		return -1;
@@ -489,7 +538,7 @@ int node_routing_line( AVP *av )
 
 		r->name = str_dup( av->val, av->vlen );
 
-		debug( "Routing policy %s config started.", r->name );
+		debug( "Routing policy '%s' config started.", r->name );
 	}
 	else if( attIs( "pattern" ) )
 	{
@@ -594,17 +643,3 @@ int node_routing_line( AVP *av )
 }
 
 
-// they are backwards
-void node_sort_routings( void )
-{
-	NODE_ROUTE *list, *nr, *nr_next;
-
-	for( list = NULL, nr = ctl->node->policies; nr; nr = nr_next )
-	{
-		nr_next  = nr->next;
-		nr->next = list;
-		list     = nr;
-	}
-
-	ctl->node->policies = list;
-}

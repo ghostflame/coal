@@ -35,7 +35,7 @@ void relay_collect_points( RDEST *d )
 
 
 
-void relay_write_point( NSOCK *s, POINT *p )
+void relay_write_point_bin( NSOCK *s, POINT *p )
 {
 	uint16_t *us;
 	uint8_t *uc;
@@ -69,6 +69,22 @@ void relay_write_point( NSOCK *s, POINT *p )
 }
 
 
+void relay_write_point_line( NSOCK *s, POINT *p )
+{
+	char *op;
+
+	// write the line
+	op = (char *) s->out.buf + s->out.len;
+
+	s->out.len += snprintf( op, s->out.sz - s->out.len, "%s %f %ld\n",
+				p->path->str, p->data.val, (long) p->data.ts );
+
+	if( ( s->out.buf + s->out.len ) > s->out.hwmk )
+		net_write_data( s );
+}
+
+
+
 void *relay_flush( void *arg )
 {
 	POINT *p;
@@ -93,17 +109,27 @@ void *relay_flush( void *arg )
 	// collect any points
 	relay_collect_points( d );
 
-	// and process those (or none)
+	// and unlock
+	pthread_mutex_unlock( &(d->pt_ctl) );
+
+	// anything to do?
+	if( !d->outgoing ) {
+		return NULL;
+	}
+
+	// process the list
 	while( d->outgoing )
-	{
+	{	
 		p = d->outgoing;
 		d->outgoing = p->next;
 
-		relay_write_point( d->data, p );
+		(d->rfun)( d->data, p );
 	}
 
-	// and unlock
-	pthread_mutex_unlock( &(d->pt_ctl) );
+	// flush any remaining data
+	if( d->data->out.len )
+		net_write_data( d->data );
+
 	return NULL;
 }
 
@@ -156,6 +182,7 @@ void relay_stop( void )
 
 	for( d = ctl->relay->dests; d; d = d->next )
 	{
+		notice( "Shutting down destination '%s'", d->name );
 		shutdown( d->data->sock, SHUT_RDWR );
 		close( d->data->sock );
 		d->data->sock = -1;
@@ -173,6 +200,9 @@ int relay_start( void )
 	for( d = ctl->relay->dests; d; d = d->next )
 	{
 		snprintf( label, 128, "data relay connection to %s", d->name );
+
+		// and copy that to the socket
+		d->data->name = strdup( label );
 
 		// make space for the queues and their locks
 		d->incoming = (POINT **) allocz( d->qcount * sizeof( POINT * ) );
@@ -267,7 +297,7 @@ int relay_config_line( AVP *av )
 	}
 	else if( attIs( "qport" ) )
 	{
-		d->data_peer.sin_port = htons( (uint16_t) strtoul( av->val, NULL, 10 ) );
+		d->query_peer.sin_port = htons( (uint16_t) strtoul( av->val, NULL, 10 ) );
 
 		debug( "Relay destination %s sends queries to port %hu",
 			( d->name ) ? d->name : "as yet unnamed", ntohs( d->query_peer.sin_port ) );
@@ -275,9 +305,15 @@ int relay_config_line( AVP *av )
 	else if( attIs( "type" ) )
 	{
 		if( !strcasecmp( av->val, "line" ) )
+		{
 			d->type = NET_COMM_LINE;
+			d->rfun = &relay_write_point_line;
+		}
 		else if( !strcasecmp( av->val, "bin" ) || !strcasecmp( av->val, "binary" ) )
+		{
 		 	d->type = NET_COMM_BIN;
+			d->rfun = &relay_write_point_bin;
+		}
 		else
 		{
 			warn( "Unrecognised relay communications type '%s'", av->val );
