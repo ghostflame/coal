@@ -37,12 +37,16 @@ struct libcoal_connection
 	unsigned char		*	outbuf;
 	unsigned char		*	wrptr;
 	unsigned char		*	hwmk;
+	int						outlen;
 
 	unsigned char		*	inbuf;
 	unsigned char		*	rdptr;
 	unsigned char		*	keep;
 	int						inlen;
 	int						keepLen;
+	int						waiting;
+
+	COALQRY				*	qry;
 };
 
 

@@ -1,8 +1,40 @@
 #include "local.h"
 
-int libcoal_query( COALH *h, COALQRY *q )
+
+int __libcoal_read_data_query( COALH *h, COALCONN *c, int wait )
 {
+	
+
+
+}
+
+
+int __libcoal_read_tree_query( COALH *h, COALCONN *c, int wait )
+{
+	
+
+
+
+
+}
+
+
+
+int __libcoal_read_query( COALH *h, COALCONN *c, int wait )
+{
+	return ( c->qry-tq ) ? __libcoal_read_tree_query( h, c, wait ) :
+	                       __libcoal_read_data_query( h, c, wait );
+}
+
+
+
+int libcoal_query( COALH *h, COALQRY *q, int wait )
+{
+	uint16_t *us;
 	COALCONN *c;
+	uint8_t *uc;
+	time_t *tp;
+	int ret;
 
 	c = h->query;
 
@@ -12,11 +44,61 @@ int libcoal_query( COALH *h, COALQRY *q )
 		return -1;
 	}
 
-	// write query to network, wait for answer
+	// are we already waiting for a query on this socket?
+	if( c->waiting )
+	{
+		if( q != c->qry ) {
+			herr( EXISTING_QRY, "Another query in progress." );
+			return -1;
+		}
 
+		return __libcoal_read_query( h, c, wait );
+	}
 
+	// write query to network
+	c->qry = q;
 
-	return 0;
+	uc    = c->wrptr;
+	*uc++ = 0x01;
+	*uc++ = ( q->tq ) ? BINF_TYPE_QUERY : BINF_TYPE_TREE;
+	us    = (uint16_t *) uc;
+	*us++ = (uint16_t) ( q->path->len + 13 );
+	tp    = (time_t *) us;
+	*tp++ = q->start;
+	*tp++ = q->end;
+	uc    = (uint8_t *) tp;
+	*uc++ = (uint8_t) q->metric;
+	memcpy( uc, q->path->str, q->path->len );
+	uc   += q->path->len;
+	*uc++ = 0x00;
+
+	c->wrptr = uc;
+	c->outlen = c->wrptr - c->outbuf;
+
+	while( c->outlen % 4 )
+	{
+		c->outlen++;
+		*(c->wrptr++) = 0x00;
+	}
+
+	// flatten the inbuf
+	c->rdptr   = c->inbuf;
+	c->keep    = NULL;
+	c->inlen   = 0;
+	c->keepLen = 0;
+
+	// and mark us as waiting for an answer
+	c->waiting = 1;
+
+	// and write the query
+	ret = libcoal_net_flush( h, c );
+
+	// are we waiting for an answer?
+	if( ret == 0 && wait )
+		return __libcoal_read_query( h, c, wait );
+
+	// or just return the result of the write
+	return ret;
 }
 
 

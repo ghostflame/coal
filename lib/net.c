@@ -132,3 +132,15 @@ Flush_Finished:
 }
 
 
+
+
+int libcoal_net_read( COALH *h, COALCONN *c )
+{
+	int ret = 0;
+
+
+
+	return ret;
+}
+
+

@@ -61,6 +61,7 @@ enum libcoal_errors
 	LCE_NOT_ENABLED,
 	LCE_POLL_ERROR,
 	LCE_NO_QRY,
+	LCE_EXISTING_QRY,
 	LCE_MAX
 };
 
