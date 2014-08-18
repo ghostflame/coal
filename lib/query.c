@@ -5,7 +5,7 @@ int __libcoal_read_data_query( COALH *h, COALCONN *c, int wait )
 {
 	
 
-
+	return 0;
 }
 
 
@@ -15,15 +15,15 @@ int __libcoal_read_tree_query( COALH *h, COALCONN *c, int wait )
 
 
 
-
+	return 0;
 }
 
 
 
 int __libcoal_read_query( COALH *h, COALCONN *c, int wait )
 {
-	return ( c->qry-tq ) ? __libcoal_read_tree_query( h, c, wait ) :
-	                       __libcoal_read_data_query( h, c, wait );
+	return ( c->qry->tq ) ? __libcoal_read_tree_query( h, c, wait ) :
+	                        __libcoal_read_data_query( h, c, wait );
 }
 
 
@@ -62,14 +62,14 @@ int libcoal_query( COALH *h, COALQRY *q, int wait )
 	*uc++ = 0x01;
 	*uc++ = ( q->tq ) ? BINF_TYPE_QUERY : BINF_TYPE_TREE;
 	us    = (uint16_t *) uc;
-	*us++ = (uint16_t) ( q->path->len + 13 );
+	*us++ = (uint16_t) ( q->len + 13 );
 	tp    = (time_t *) us;
 	*tp++ = q->start;
 	*tp++ = q->end;
 	uc    = (uint8_t *) tp;
 	*uc++ = (uint8_t) q->metric;
-	memcpy( uc, q->path->str, q->path->len );
-	uc   += q->path->len;
+	memcpy( uc, q->path, q->len );
+	uc   += q->len;
 	*uc++ = 0x00;
 
 	c->wrptr = uc;

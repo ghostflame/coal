@@ -36,7 +36,7 @@ fast:  $(LIBT) $(RKVT)
 
 $(LIBT): $(OBJS)
 	$(CC) -o $(LIBT) $(LFLAGS) $(OBJS)
-	@ln -s $(LIB) $(LIB).$(MAXV)
+	@ln -fs $(LIB) $(LIB).$(MAXV)
 	@echo "Built coal binary access lib."
 
 $(RKVT): $(OBJS)
