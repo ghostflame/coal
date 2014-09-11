@@ -99,7 +99,7 @@ CCTXT *config_make_context( char *path, CCTXT *parent )
 		memcpy( ctx->section, parent->section, 512 );
 	}
 	else
-		strcpy( ctx->section, "main" );
+		strncpy( ctx->section, "main", 6 );
 
 	// set the global on the first call
 	if( !ctxt_top )
