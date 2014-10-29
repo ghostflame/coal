@@ -46,6 +46,9 @@ LOCK_CTL *lock_config_defaults( void )
 	pthread_mutex_init( &(l->query), NULL );
 	pthread_mutex_init( &(l->field), NULL );
 
+	// used in sync.c
+	pthread_mutex_init( &(l->field), NULL );
+
 	// used to lock nodes
 	for( i = 0; i < NODE_MUTEX_COUNT; i++ )
 		pthread_mutex_init( l->node + i, NULL );
@@ -72,6 +75,9 @@ void lock_shutdown( void )
 
 	// used in query.c
 	pthread_mutex_destroy( &(l->query) );
+	pthread_mutex_destroy( &(l->field) );
+
+	// used in sync.c
 	pthread_mutex_destroy( &(l->field) );
 
 	// used to lock nodes

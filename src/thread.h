@@ -18,6 +18,7 @@ struct lock_control
 	pthread_mutex_t			field;
 	pthread_mutex_t			point;
 	pthread_mutex_t			config;
+	pthread_mutex_t			sync;					// sync control
 	pthread_mutex_t			node[NODE_MUTEX_COUNT];	// node incoming
 
 	int						init_done;

@@ -78,9 +78,23 @@ void sync_nodes( NODE *n )
 
 void *sync_all_nodes( void *arg )
 {
+	unsigned long sid = ctl->sync->sync_id;
 	THRD *t = (THRD *) arg;
 
+	debug( "Starting synchronization thread (%02d) %08lu/%lu.",
+		ctl->sync->curr_threads, sid, (unsigned long) t->id );
+
 	sync_nodes( ctl->node->nodes );
+
+	debug( "Finished synchronization thread (%02d) %08lu/%lu.",
+		ctl->sync->curr_threads, sid, (unsigned long) t->id );
+
+	// keep track of threads
+	pthread_mutex_lock( &(ctl->locks->sync) );
+	// don't let us do anything stupid
+	if( ctl->sync->curr_threads > 0 )
+		ctl->sync->curr_threads--;
+	pthread_mutex_unlock( &(ctl->locks->sync) );
 
 	free( t );
 	return NULL;
@@ -103,14 +117,23 @@ void *sync_loop( void *arg )
 	{
 		if( ctl->curr_time > syncTick )
 		{
+			if( ctl->sync->curr_threads < ctl->sync->max_threads )
+			{
+				// keep track of threads
+				pthread_mutex_lock( &(ctl->locks->sync) );
+				ctl->sync->curr_threads++;
+				ctl->sync->sync_id++;
+				thread_throw( sync_all_nodes, NULL );
+				pthread_mutex_unlock( &(ctl->locks->sync) );
+			}
+
 			syncTick += ctl->sync->sync_sec;
-			thread_throw( sync_all_nodes, NULL );
 		}
 
 		if( ctl->curr_time > makeTick )
 		{
-			makeTick += ctl->sync->make_sec;
 			thread_throw( node_maker, NULL );
+			makeTick += ctl->sync->make_sec;
 		}
 
 		usleep( 100000 );
@@ -132,6 +155,8 @@ int sync_config_line( AVP *av )
 		ctl->sync->sync_sec = strtod( av->val, NULL );
 	else if( attIs( "make_sec" ) )
 		ctl->sync->make_sec = strtod( av->val, NULL );
+	else if( attIs( "max_sync_threads" ) )
+	  	ctl->sync->max_threads = strtoul( av->val, NULL, 10 );
 	else if( attIs( "tick_usec" ) )
 		ctl->sync->tick_usec = strtoul( av->val, NULL, 10 );
 	else
@@ -148,9 +173,10 @@ SYNC_CTL *sync_config_defaults( void )
 
 	sc = (SYNC_CTL *) allocz( sizeof( SYNC_CTL ) );
 
-	sc->sync_sec  = DEFAULT_SYNC_INTERVAL;
-	sc->make_sec  = DEFAULT_MAKE_INTERVAL;
-	sc->tick_usec = DEFAULT_MAIN_TICK_USEC;
+	sc->sync_sec    = DEFAULT_SYNC_INTERVAL;
+	sc->make_sec    = DEFAULT_MAKE_INTERVAL;
+	sc->tick_usec   = DEFAULT_MAIN_TICK_USEC;
+	sc->max_threads = DEFAULT_MAX_SYNC_THREADS;
 
 	return sc;
 }
