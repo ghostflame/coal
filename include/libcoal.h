@@ -36,6 +36,8 @@
 
 #define COAL_ERRBUF_SZ					1024
 
+#define COAL_QUERY_SLEEP_USEC			4000
+
 
 #ifndef Err
 #define Err strerror( errno )
@@ -47,6 +49,7 @@ typedef struct libcoal_connection   COALCONN;
 typedef struct libcoal_point		COALPT;
 typedef struct libcoal_data_answer	COALDANS;
 typedef struct libcoal_tree_answer	COALTANS;
+typedef struct libcoal_tree_member	COALTREE;
 typedef struct libcoal_query        COALQRY;
 
 
@@ -62,6 +65,8 @@ enum libcoal_errors
 	LCE_POLL_ERROR,
 	LCE_NO_QRY,
 	LCE_EXISTING_QRY,
+	LCE_RECV_ERROR,
+	LCE_BAD_QANS,
 	LCE_MAX
 };
 
@@ -73,12 +78,25 @@ struct libcoal_point
 	int				valid;
 };
 
+struct libcoal_tree_member
+{
+	COALTREE	*	next;
+	COALTREE	*	parent;
+
+	unsigned short	len;
+	unsigned char	is_leaf;
+	char		*	path;
+
+	int				child_count;
+	COALTREE	*	children;
+};
+
+
 
 struct libcoal_tree_answer
 {
 	int				count;
-	int			*	lengths;
-	char		**	children;
+	COALTREE	*	children;
 };
 
 struct libcoal_data_answer
@@ -91,6 +109,19 @@ struct libcoal_data_answer
 
 
 
+enum LIBCOAL_QUERY_STATES
+{
+	COAL_QUERY_EMPTY = 0,
+	COAL_QUERY_PREPD,
+	COAL_QUERY_SENT,
+	COAL_QUERY_WAITING,
+	COAL_QUERY_READ,
+	COAL_QUERY_INVALID,
+	COAL_QUERY_COMPLETE
+};
+
+
+
 struct libcoal_query
 {
 	COALQRY		*	next;
@@ -98,7 +129,8 @@ struct libcoal_query
 	int				len;
 
 	int				tq;		// tree query
-	int				answer;
+	int				state;
+	int				size;
 
 	time_t			start;
 	time_t			end;
@@ -115,13 +147,16 @@ struct libcoal_query
 
 // data.c
 int libcoal_data_add( COALH *h, time_t ts, float val, char *path, int len );
+int libcoal_data_sent( COALH *h, time_t ts, float val, char *path, int len );
 
 // net.c
 int libcoal_net_flush( COALH *h, COALCONN *c );
 int libcoal_connect( COALH *h );
 
 // query.c
-int libcoal_data_query( COALH *H, COALQRY **qp, char *path, int len, time_t from, time_t to, int metric );
-int libcoal_tree_query( COALH *H, COALQRY **qp, char *path, int len );
+int libcoal_prepare_data_query( COALH *h, COALQRY **qp, char *path, int len, time_t from, time_t to, int metric );
+int libcoal_prepare_tree_query( COALH *h, COALQRY **qp, char *path, int len );
+int libcoal_query( COALH *h, COALQRY *q, int wait );
+int libcoal_clean_tree( COALTREE **top );
 
 #endif

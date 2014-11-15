@@ -70,6 +70,7 @@ struct libcoal_handle
 // init.c
 void *allocz( int size );
 
-
+// net.c
+int libcoal_net_read( COALH *h, COALCONN *c );
 
 #endif

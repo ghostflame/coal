@@ -136,11 +136,29 @@ Flush_Finished:
 
 int libcoal_net_read( COALH *h, COALCONN *c )
 {
-	int ret = 0;
+	int i;
 
+	if( !( i = recv( c->sock, c->inbuf + c->inlen, INBUF_SZ - c->inlen, MSG_DONTWAIT ) ) )
+	{
+		// that would be the fin, then
+		close( c->sock );
+		c->connected = 0;
+		return 0;
+	}
+	else if( i < 0 )
+	{
+		if( errno != EAGAIN
+		 && errno != EWOULDBLOCK )
+		{
+			herr( RECV_ERROR, "Recv error for host %s -- %s", h->host, Err );
+			return -1;
+		}
+		return 0;
+	}
 
+	c->inlen += i;
 
-	return ret;
+	return i;
 }
 
 

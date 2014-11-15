@@ -58,4 +58,14 @@ int libcoal_data_add( COALH *h, time_t ts, float val, char *path, int len )
 }
 
 
+int libcoal_data_send( COALH *h, time_t ts, float val, char *path, int len ) {
+
+	int ret = 0;
+
+  	ret += libcoal_data_send( h, ts, val, path, len );
+	ret += libcoal_net_flush( h, h->data );
+
+	return ret;
+}
+
 
