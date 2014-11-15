@@ -533,6 +533,8 @@ void *push_loop( void *arg )
 	POINT *inc = NULL;
 	THRD *t = (THRD *) arg;
 
+	loop_mark_start( );
+
 	while( ctl->run_flags & RUN_LOOP )
 	{
 		// anything for us?
@@ -551,6 +553,8 @@ void *push_loop( void *arg )
 		grab_incoming( &inc );
 		data_push_points( inc );
 	}
+
+	loop_mark_done( );
 
 	free( t );
 	return NULL;
@@ -571,9 +575,10 @@ void *data_loop( void *arg )
 	ntc = (NET_TYPE_CTL *) t->arg;
 	pc  = ntc->data;
 
-
 	p.fd     = pc->sock;
 	p.events = POLL_EVENTS;
+
+	loop_mark_start( );
 
 	while( ctl->run_flags & RUN_LOOP )
 	{
@@ -599,8 +604,8 @@ void *data_loop( void *arg )
 		}
 	}
 
-	// TODO
 	// say we are shut down
+	loop_mark_done( );
 
 	free( t );
 	return NULL;

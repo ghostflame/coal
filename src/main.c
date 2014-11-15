@@ -20,11 +20,6 @@ storing it against timestamps.  See the documentation for the details.\n\n";
 	exit( 0 );
 }
 
-int shut_down_is_complete( void )
-{
-	return 1;
-}
-
 
 void shut_down( int exval )
 {
@@ -39,13 +34,12 @@ void shut_down( int exval )
 
 	info( "Waiting for all threads to stop." );
 
-
 	// wait a maximum of 30 seconds
 	i = 0;
-	while( !shut_down_is_complete( ) && i++ < 300 )
+	while( ctl->loop_count > 0 && i++ < 300 )
 		usleep( 10000 );
 
-	if( shut_down_is_complete( ) )
+	if( ctl->loop_count <= 0 )
 		info( "All threads have completed." );
 	else
 	  	warn( "Shutting down without thread completion!" );

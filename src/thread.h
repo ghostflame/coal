@@ -17,7 +17,7 @@ struct lock_control
 	pthread_mutex_t			data;					// data backlog
 	pthread_mutex_t			field;
 	pthread_mutex_t			point;
-	pthread_mutex_t			config;
+	pthread_mutex_t			loop;					// thread startup/shutdown
 	pthread_mutex_t			sync;					// sync control
 	pthread_mutex_t			node[NODE_MUTEX_COUNT];	// node incoming
 

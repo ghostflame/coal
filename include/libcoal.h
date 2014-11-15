@@ -157,6 +157,6 @@ int libcoal_connect( COALH *h );
 int libcoal_prepare_data_query( COALH *h, COALQRY **qp, char *path, int len, time_t from, time_t to, int metric );
 int libcoal_prepare_tree_query( COALH *h, COALQRY **qp, char *path, int len );
 int libcoal_query( COALH *h, COALQRY *q, int wait );
-int libcoal_clean_tree( COALTREE **top );
+void libcoal_clean_tree( COALTREE **top );
 
 #endif

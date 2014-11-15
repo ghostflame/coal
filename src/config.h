@@ -29,6 +29,9 @@ struct coal_control
 
 	unsigned int		run_flags;
 
+	// are we finished yet?
+	int					loop_count;
+
 	// timing
 	double				start_time;
 	double				curr_time;

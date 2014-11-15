@@ -109,6 +109,8 @@ void *sync_loop( void *arg )
 
 	THRD *t = (THRD *) arg;
 
+	loop_mark_start( );
+
 	// throw them into the future
 	syncTick = ctl->curr_time + ctl->sync->sync_sec;
 	makeTick = ctl->curr_time + ctl->sync->make_sec;
@@ -139,8 +141,8 @@ void *sync_loop( void *arg )
 		usleep( 100000 );
 	}
 
-	// TODO
 	// say we're shut down
+	loop_mark_done( );
 
 	free( t );
 	return NULL;

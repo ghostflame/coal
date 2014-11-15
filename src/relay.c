@@ -145,6 +145,8 @@ void *relay_loop( void *arg )
 	d = (RDEST *) t->arg;
 	free( t );
 
+	loop_mark_start( );
+
 	while( ctl->run_flags & RUN_LOOP )
 	{
 		// flush each relay
@@ -154,6 +156,8 @@ void *relay_loop( void *arg )
 		// and sleep
 		usleep( ctl->relay->usdelay );
 	}
+
+	loop_mark_done( );
 
 	return NULL;
 }

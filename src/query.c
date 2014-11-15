@@ -831,6 +831,8 @@ void *query_loop( void *arg )
 	p.fd     = pc->sock;
 	p.events = POLL_EVENTS;
 
+	loop_mark_start( );
+
 	while( ctl->run_flags & RUN_LOOP )
 	{
 	  	// this value is all about responsiveness to shutdown
@@ -855,9 +857,8 @@ void *query_loop( void *arg )
 		}
 	}
 
-	// TODO
 	// say we are shut down
-
+	loop_mark_done( );
 
 	free( t );
 	return NULL;

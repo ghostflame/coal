@@ -499,7 +499,6 @@ void net_stop( void )
 	notice( "Stopping networking." );
 	net_stop_type( ctl->net->line );
 	net_stop_type( ctl->net->bin );
-	return;
 }
 
 
