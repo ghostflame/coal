@@ -12,7 +12,7 @@ void thread_throw_init_attr( void )
 }
 
 
-void thread_throw( void *(*fp) (void *), void *arg )
+pthread_t thread_throw( void *(*fp) (void *), void *arg )
 {
 	THRD *t;
 
@@ -22,7 +22,25 @@ void thread_throw( void *(*fp) (void *), void *arg )
 	t = (THRD *) allocz( sizeof( THRD ) );
 	t->arg = arg;
 	pthread_create( &(t->id), tt_attr, fp, t );
+
+	return t->id;
 }
+
+
+// throw a network socket watcher and a handler
+void thread_throw_watched( void *(*fp) (void *), void *arg )
+{
+	THRD *t;
+
+	if( !tt_attr )
+		thread_throw_init_attr( );
+
+	t = (THRD *) allocz( sizeof( THRD ) );
+	t->arg = arg;
+	t->fp  = fp;
+	pthread_create( &(t->id), tt_attr, &net_watched_socket, t );
+}
+
 
 
 LOCK_CTL *lock_config_defaults( void )

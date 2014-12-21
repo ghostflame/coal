@@ -124,9 +124,8 @@ int main( int ac, char **av )
 		}
 
 
-	if( get_config( ctl->cfg_file ) ) {
+	if( get_config( ctl->cfg_file ) )
 		fatal( "Unable to read config file '%s'\n", ctl->cfg_file );
-	}
 
 	// can we chdir to our base dir?
 	if( chdir( ctl->basedir ) )
@@ -136,9 +135,8 @@ int main( int ac, char **av )
 		debug( "Working directory switched to %s", ctl->basedir );
 
 	// match up relay rules against destinations
-	if( config_check_relay( ) ) {
+	if( config_check_relay( ) )
 		fatal( "Unable to validate relay config." );
-	}
 
 	// were we just testing config?
 	if( testConf )

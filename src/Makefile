@@ -39,7 +39,7 @@ $(BIN): $(OBJS)
 	@echo "Built coal.  Go mining!"
 
 install:
-	@install -m755 $(BINDIR)/$(BIN) $(INSDIR)/bin/$(BIN)
+	@install -m755 $(BINDIR)/$(BIN) $(COAL_BIN_DIR)/$(BIN)
 	@echo "Installed coal as $(COAL_BIN_DIR)/$(BIN)"
 
 clean:

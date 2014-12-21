@@ -16,7 +16,7 @@ fast:  all
 
 install:
 	@mkdir $(INSDIR)
-	@-for d in $(SUBDIR); do mkdir -p $(INSDIR)/$(SUBDIR)
+	@-for d in $(SUBDIR); do mkdir -p $(INSDIR)/$(SUBDIR); done
 	@echo "Created coal install location $(INSDIR)"
 	@export COAL_INSTALL_DIR=$(INSDIR)
 	@export COAL_BIN_DIR=$(INSDIR)/bin

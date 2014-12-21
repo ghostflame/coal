@@ -18,6 +18,9 @@
 #define HOST_NEW						0x02
 
 
+#define NET_DEAD_CONN_TIMER				3600.0	// 1 hr
+
+
 enum net_comm_types
 {
 	NET_COMM_LINE = 0,
@@ -54,6 +57,7 @@ struct network_control
 	NET_TYPE_CTL		*	bin;
 
 	int						status;
+	double					dead_time;
 };
 
 
@@ -90,6 +94,9 @@ struct host_data
 
 	struct sockaddr_in		peer;
 
+	double					started;// accept time
+	double					last;	// last communication
+
 	int						type;	// line or bin
 	unsigned long			points;	// counter
 
@@ -97,8 +104,14 @@ struct host_data
 	WORDS				*	val;	// per line
 };
 
-NSOCK *net_make_sock( int insz, int outsz, char *name, struct sockaddr_in *peer );
+// thread control
+void *net_watched_socket( void *arg );
+
+// client connections
 HOST *net_get_host( int sock, int type );
+void net_close_host( HOST *h );
+
+NSOCK *net_make_sock( int insz, int outsz, char *name, struct sockaddr_in *peer );
 int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog );
 int net_connect( NSOCK *s );
 

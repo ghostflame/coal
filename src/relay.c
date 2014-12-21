@@ -13,7 +13,8 @@ void relay_collect_points( RDEST *d )
 		// grab one queue
 		pthread_mutex_lock( &(d->locks[i]) );
 
-		if( d->incoming[i] ) {
+		if( d->incoming[i] )
+		{
 			list           = d->incoming[i];
 			d->incoming[i] = NULL;
 		}
@@ -113,9 +114,8 @@ void *relay_flush( void *arg )
 	pthread_mutex_unlock( &(d->pt_ctl) );
 
 	// anything to do?
-	if( !d->outgoing ) {
+	if( !d->outgoing )
 		return NULL;
-	}
 
 	// process the list
 	while( d->outgoing )
@@ -346,7 +346,8 @@ int relay_config_line( AVP *av )
 			return -1;
 		}
 
-		if( !d->data_peer.sin_addr.s_addr ) {
+		if( !d->data_peer.sin_addr.s_addr )
+		{
 			// attempt lookup on name as a hostname
 			if( !( he = gethostbyname( d->name ) ) )
 			{

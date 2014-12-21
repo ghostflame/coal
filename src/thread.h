@@ -31,11 +31,13 @@ struct thread_data
 	THRD				*	next;
 	pthread_t				id;
 	void				*	arg;
+	throw_fn			*	fp;		// only used for networks
 };
 
 
 
-void thread_throw( void *(*fp) (void *), void *arg );
+pthread_t thread_throw( void *(*fp) (void *), void *arg );
+void thread_throw_watched( void *(*fp) (void *), void *arg );
 
 LOCK_CTL *lock_config_defaults( void );
 void lock_shutdown( void );

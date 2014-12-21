@@ -1,5 +1,84 @@
 #include "coal.h"
 
+/*
+ * Watched sockets
+ *
+ * This works by thread_throw_network creating a watcher
+ * thread.  As there are various lock-up issues with
+ * networking, we have a watcher thread that keeps a check
+ * on the networking thread.  It watches for the thread to
+ * still exist and the network start time to match what it
+ * captured early on.
+ *
+ * If it sees the time since last activity get too high, we
+ * assume that the connection has died.  So we kill the
+ * thread and close the connection.
+ */
+
+void *net_watched_socket( void *arg )
+{
+	double stime;
+	pthread_t nt;
+	THRD *t;
+	HOST *h;
+	int rv;
+
+	t = (THRD *) arg;
+	h = (HOST *) t->arg;
+
+	// capture the start time - it's sort of a thread id
+	stime = h->started;
+	debug( "Connection from %s starts at %.6f", h->net->name, stime );
+
+	// capture the thread ID of the watched thread
+	// when throwing the handler function
+	nt = thread_throw( t->fp, t->arg );
+
+	while( ctl->run_flags & RUN_LOOP )
+	{
+		rv = pthread_kill( nt, 0 );
+
+		// safe because we never destroy host structures
+		if( rv == ESRCH || h->started != stime )
+		{
+			debug( "Thread %lu has gone away, or socket reused.", nt );
+			break;
+		}
+
+		// just use our maintained clock
+		if( ( ctl->curr_time - h->last ) > ctl->net->dead_time )
+		{
+			// cancel that thread
+			pthread_cancel( nt );
+			notice( "Connection from host %s timed out.", h->net->name );
+			net_close_host( h );
+			break;
+		}
+
+		// we are not busy threads around these parts
+		usleep( 200000 );
+	}
+
+	debug( "Watcher of thread %lu, exiting." );
+	free( t );
+	return NULL;
+}
+
+
+void net_close_host( HOST *h )
+{
+	if( shutdown( h->net->sock, SHUT_RDWR ) )
+		err( "Shutdown error on host %s -- %s",
+				h->net->name, Err );
+
+	close( h->net->sock );
+	h->net->sock = -1;
+	debug( "Closed connection from host %s.", h->net->name );
+
+	mem_free_host( &h );
+}
+
+
 HOST *net_get_host( int sock, int type )
 {
 	struct sockaddr_in from;
@@ -24,6 +103,9 @@ HOST *net_get_host( int sock, int type )
 	h->peer      = from;
 	h->net->name = strdup( buf );
 	h->net->sock = d;
+	// should be a unique timestamp
+	h->started   = timedbl( NULL );
+	h->last      = h->started;
 
 	return h;
 }
@@ -299,6 +381,9 @@ int net_read_bin( HOST *h )
 	if( !n->in.len )
 		return 0;
 
+	// mark the socket as active
+	h->last = ctl->curr_time;
+
 	// we'll chew through this data lump by lump
 	l     = n->in.len;
 	start = n->in.buf;
@@ -372,6 +457,9 @@ int net_read_lines( HOST *h )
 	// do we have anything at all?
 	if( !n->in.len )
 		return 0;
+
+	// mark the socket as active
+	h->last = ctl->curr_time;
 
 	if( n->in.buf[n->in.len - 1] == LINE_SEPARATOR )
 		// remove any trailing separator
@@ -533,6 +621,8 @@ NET_CTL *net_config_defaults( void )
 	net->bin->type          = NET_COMM_BIN;
 	net->bin->enabled       = DEFAULT_NET_BIN_ENABLED;
 
+	net->dead_time			= NET_DEAD_CONN_TIMER;
+
 	return net;
 }
 
@@ -543,8 +633,20 @@ int net_config_line( AVP *av )
 	PORT_CTL *pc = NULL;
 	char *d, *p;
 
+	// only a few are single words
 	if( !( d = strchr( av->att, '.' ) ) )
+	{
+		if( attIs( "timeout" ) )
+		{
+			ctl->net->dead_time = strtod( av->val, NULL );
+			ndebug( "Dead connection timeout set to %.2f sec.", ctl->net->dead_time );
+			return 0;
+		}
+
 		return -1;
+	}
+
+	// then it's by line. or data.
 	p = d + 1;
 
 	// they have top begin with a type name

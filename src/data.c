@@ -502,6 +502,10 @@ void *data_connection( void *arg )
 
 	info( "Accepted data connection from host %s", h->net->name );
 
+	// make sure we can be cancelled
+	pthread_setcancelstate( PTHREAD_CANCEL_ENABLE, NULL );
+	pthread_setcanceltype( PTHREAD_CANCEL_ASYNCHRONOUS, NULL );
+
 	switch( h->type )
 	{
 		case NET_COMM_LINE:
@@ -515,13 +519,7 @@ void *data_connection( void *arg )
 	info( "Closing connection from host %s after %lu data points.",
 				h->net->name, h->points );
 
-	if( shutdown( h->net->sock, SHUT_RDWR ) )
-		err( "Shutdown error on host %s -- %s",
-				h->net->name, Err );
-
-	close( h->net->sock );
-	h->net->sock = -1;
-	mem_free_host( &h );
+	net_close_host( h );
 
   	free( t );
 	return NULL;
@@ -600,7 +598,7 @@ void *data_loop( void *arg )
 		if( p.revents & POLL_EVENTS )
 		{
 			if( ( h = net_get_host( p.fd, ntc->type ) ) )
-				thread_throw( data_connection, h );
+				thread_throw_watched( data_connection, h );
 		}
 	}
 

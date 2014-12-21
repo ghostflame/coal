@@ -523,16 +523,20 @@ QUERY *query_line_read( HOST *h )
 				q->rtype = c3db_metric( h->val->wd[QUERY_FIELD_METRIC] );
 
 				// do some checks on the timestamps
-				if( !q->start ) {
+				if( !q->start )
+				{
 					// you don't really mean all time, do you?
 					// an informal way of saying '24hrs please'
 					q->start = (time_t) ( ctl->curr_time - 86400.0 );
 				}
 
-				if( q->end == 0 ) {
+				if( q->end == 0 )
+				{
 					// an informal way of saying 'now'
 					q->end = (time_t) ctl->curr_time;
-				} else if( q->end < q->start ) {
+				}
+				else if( q->end < q->start )
+				{
 					qwarn( "End < start in query from host %s", h->net->name );
 					mem_free_query( &q );
 					continue;
@@ -684,7 +688,7 @@ void query_bin_connection( HOST *h )
 			continue;
 
 		// we what we have
-		if( !( list = query_line_read( h ) ) )
+		if( !( list = query_bin_read( h ) ) )
 		{
 			if( h->net->flags & HOST_CLOSE )
 				break;
@@ -787,7 +791,11 @@ void *query_connection( void *arg )
 	t = (THRD *) arg;
 	h = (HOST *) t->arg;
 
-	info( "Accepted query connection from host %s", h->net->name );
+	qinfo( "Accepted query connection from host %s", h->net->name );
+
+	// make sure we can be cancelled
+	pthread_setcancelstate( PTHREAD_CANCEL_ENABLE, NULL );
+	pthread_setcanceltype( PTHREAD_CANCEL_ASYNCHRONOUS, NULL );
 
 	switch( h->type )
 	{
@@ -799,13 +807,7 @@ void *query_connection( void *arg )
 			break;
 	}
 
-	// all done
-	if( shutdown( h->net->sock, SHUT_RDWR ) )
-		qerr( "Shutdown error on host %s -- %s",
-			h->net->name, Err );
-	close( h->net->sock );
-	h->net->sock = -1;
-	mem_free_host( &h );
+	net_close_host( h );
 
 	free( t );
 	return NULL;
@@ -853,7 +855,7 @@ void *query_loop( void *arg )
 		if( p.revents & POLL_EVENTS )
 		{
 			if( ( h = net_get_host( p.fd, ntc->type ) ) )
-				thread_throw( query_connection, h );
+				thread_throw_watched( query_connection, h );
 		}
 	}
 

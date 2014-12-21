@@ -48,6 +48,8 @@ void mem_free_host( HOST **h )
 	sh->net->in.len   = 0;
 	sh->net->keep.buf = NULL;
 	sh->net->keep.len = 0;
+	sh->last          = 0.0;
+	sh->started       = 0.0;
 
 	if( sh->net->name )
 	{
