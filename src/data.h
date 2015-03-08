@@ -13,8 +13,8 @@
 struct data_point
 {
 	POINT			*	next;
-	C3PNT				data;
 	PATH			*	path;
+	C3PNT				data;
 	int					handled;
 };
 

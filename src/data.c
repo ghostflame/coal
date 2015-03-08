@@ -248,6 +248,38 @@ void grab_incoming( POINT **list )
 }
 
 
+// write a pong immediately
+void data_pong( HOST *h, void *buf, int len )
+{
+    uint32_t *ul, ts;
+    uint16_t *us, ms;
+    uint8_t *uc;
+    double ct;
+
+    ts = *((uint32_t *) (buf + 4));
+    ms = *((uint16_t *) (buf + 12));
+    ct = timedbl( NULL );
+
+    uc = (uint8_t *) (h->net->out.buf + h->net->out.len);
+
+    *uc++ = 0x01;
+    *uc++ = BINF_TYPE_PONG;
+    us    = (uint16_t *) uc;
+    *us++ = 12;
+    ul    = (uint32_t *) us;
+    *ul++ = ts;
+    *ul++ = (uint32_t) ct;
+    us    = (uint16_t *) ul;
+    *us++ = ms;
+    // get msec
+    ct   -= (uint32_t) ct; 
+    ct   *= 1000;
+    *us++ = (uint16_t) ct;
+
+    h->net->out.len += 16;
+    net_write_data( h->net );
+}
+
 
 
 
@@ -263,10 +295,20 @@ POINT *data_bin_fetch( HOST *h )
 		for( i = 0; i < h->all->wc; i++ )
 		{
 			// each of these is a binary chunk
-			buf = h->all->wd[i];
-			len = h->all->len[i];
+			buf  = h->all->wd[i];
+			len  = h->all->len[i];
 
-			if( ( type = (int) *((uint8_t *) ( buf + 1 )) ) != BINF_TYPE_DATA )
+            // read the type
+            type = (int) *((uint8_t *) (buf + 1));
+
+            // just respond to pings
+            if( type == BINF_TYPE_PING )
+            {
+                data_pong( h, buf, len );
+                continue;
+            }
+
+			if( type != BINF_TYPE_DATA )
 			{
 				warn( "Received type %d/%s from host %s on data bin connection.",
 					type, data_bin_type_names( type ), h->net->name );

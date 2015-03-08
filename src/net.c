@@ -18,10 +18,9 @@
 void *net_watched_socket( void *arg )
 {
 	double stime;
-	pthread_t nt;
+	//pthread_t nt;
 	THRD *t;
 	HOST *h;
-	int rv;
 
 	t = (THRD *) arg;
 	h = (HOST *) t->arg;
@@ -32,16 +31,15 @@ void *net_watched_socket( void *arg )
 
 	// capture the thread ID of the watched thread
 	// when throwing the handler function
-	nt = thread_throw( t->fp, t->arg );
+	//nt = thread_throw( t->fp, t->arg );
+	thread_throw( t->fp, t->arg );
 
 	while( ctl->run_flags & RUN_LOOP )
 	{
-		rv = pthread_kill( nt, 0 );
-
 		// safe because we never destroy host structures
-		if( rv == ESRCH || h->started != stime )
+		if( h->started != stime )
 		{
-			debug( "Thread %lu has gone away, or socket reused.", nt );
+            debug( "Socket has been freed or re-used." );
 			break;
 		}
 
@@ -49,9 +47,10 @@ void *net_watched_socket( void *arg )
 		if( ( ctl->curr_time - h->last ) > ctl->net->dead_time )
 		{
 			// cancel that thread
-			pthread_cancel( nt );
+			//pthread_cancel( nt );
 			notice( "Connection from host %s timed out.", h->net->name );
-			net_close_host( h );
+            h->net->flags |= HOST_CLOSE;
+			// net_close_host( h );
 			break;
 		}
 
@@ -65,14 +64,20 @@ void *net_watched_socket( void *arg )
 }
 
 
+void net_disconnect( int *sock, char *name )
+{
+	if( shutdown( *sock, SHUT_RDWR ) )
+		err( "Shutdown error on connection with %s -- %s",
+			name, Err );
+
+	close( *sock );
+	*sock = -1;
+}
+
+
 void net_close_host( HOST *h )
 {
-	if( shutdown( h->net->sock, SHUT_RDWR ) )
-		err( "Shutdown error on host %s -- %s",
-				h->net->name, Err );
-
-	close( h->net->sock );
-	h->net->sock = -1;
+	net_disconnect( &(h->net->sock), h->net->name );
 	debug( "Closed connection from host %s.", h->net->name );
 
 	mem_free_host( &h );

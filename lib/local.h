@@ -15,7 +15,6 @@
 
 typedef struct libcoal_data_point	COALDAT;
 
-
 struct libcoal_data_point
 {
 	unsigned char			vers;
@@ -25,6 +24,9 @@ struct libcoal_data_point
 	float					val;
 	char					path[];
 };
+
+
+
 
 
 struct libcoal_connection

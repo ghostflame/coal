@@ -67,27 +67,46 @@ void mem_free_host( HOST **h )
 }
 
 
+// this must always be called inside a lock
+void __mem_new_points( int count )
+{
+    POINT *list, *p;
+    int i;
+
+    // allocate a block of points
+    list = (POINT *) allocz( count * sizeof( POINT ) );
+
+    p = list + 1;
+
+    // link them up
+    for( i = 0; i < count; i++ )
+        list[i].next = p++;
+
+    // and insert them
+    list[count - 1].next = ctl->mem->points;
+    ctl->mem->points  = list;
+    ctl->mem->free_points += count;
+    ctl->mem->mem_points  += count;
+}
+
+
+
 POINT *mem_new_point( void )
 {
 	POINT *p;
 
 	pthread_mutex_lock( &(ctl->locks->point) );
-	if( ctl->mem->points )
-	{
-		p = ctl->mem->points;
-		ctl->mem->points = p->next;
-		--(ctl->mem->free_points);
-		pthread_mutex_unlock( &(ctl->locks->point) );
 
-		p->next = NULL;
-	}
-	else
-	{
-		++(ctl->mem->mem_points);
-		pthread_mutex_unlock( &(ctl->locks->point) );
+    if( !ctl->mem->points )
+        __mem_new_points( NEW_POINTS_BLOCK_SZ );
 
-		p = (POINT *) allocz( sizeof( POINT ) );
-	}
+	p = ctl->mem->points;
+	ctl->mem->points = p->next;
+	--(ctl->mem->free_points);
+
+	pthread_mutex_unlock( &(ctl->locks->point) );
+
+	p->next = NULL;
 
 	return p;
 }
@@ -95,43 +114,23 @@ POINT *mem_new_point( void )
 POINT *mem_new_points( int count )
 {
 	POINT *list, *p;
-	int i, c;
+	int i;
 
 	pthread_mutex_lock( &(ctl->locks->point) );
 
-	if( ctl->mem->free_points > count )
-	{
-		// take just some
-		list = ctl->mem->points;
-		for( p = list, i = 1; i < count; i++ )
-			p = p->next;
+    // make sure we have enough free
+    while( ctl->mem->free_points < count )
+        __mem_new_points( NEW_POINTS_BLOCK_SZ );
 
-		ctl->mem->points = p->next;
-		p->next = NULL;
+	list = ctl->mem->points;
+	for( p = list, i = 1; i < count; i++ )
+		p = p->next;
 
-		ctl->mem->free_points -= count;
-		pthread_mutex_unlock( &(ctl->locks->point) );
-	}
-	else
-	{
-		// take them all
-		list = ctl->mem->points;
-		c    = count - ctl->mem->free_points;
+	ctl->mem->points = p->next;
+	p->next = NULL;
 
-		ctl->mem->free_points = 0;
-		ctl->mem->points      = NULL;
-		ctl->mem->mem_points += c;
-
-		pthread_mutex_unlock( &(ctl->locks->point) );
-
-		// and alloc the rest
-		for( i = c; i > 0; i-- )
-		{
-			p       = (POINT *) allocz( sizeof( POINT ) );
-			p->next = list;
-			list    = p;
-		}
-	}
+	ctl->mem->free_points -= count;
+	pthread_mutex_unlock( &(ctl->locks->point) );
 
 	return list;
 }
@@ -205,29 +204,53 @@ void mem_free_point_list( POINT *list )
 }
 
 
+// this must always be called from inside a lock
+void __mem_new_paths( int count )
+{
+    WORDS *wlist, *w;
+    PATH *plist, *p;
+    int i;
+
+    // allocate a block of paths and words
+    plist = (PATH *)  allocz( count * sizeof( PATH ) );
+    wlist = (WORDS *) allocz( count * sizeof( WORDS ) );
+
+    p = plist + 1;
+    w = wlist;
+
+    // link them up
+    for( i = 0; i < count; i++ )
+    {
+        plist[i].next = p++;
+        plist[i].w    = w++;
+    }
+
+    // and insert them
+    plist[count - 1].next = ctl->mem->paths;
+    ctl->mem->paths = plist;
+    ctl->mem->free_paths += count;
+    ctl->mem->mem_paths  += count;
+}
+
+
+
 PATH *mem_new_path( char *str, int len )
 {
 	PATH *p;
 	int sz;
 
 	pthread_mutex_lock( &(ctl->locks->path) );
-	if( ctl->mem->paths )
-	{
-		p = ctl->mem->paths;
-		ctl->mem->paths = p->next;
-		--(ctl->mem->free_paths);
-		pthread_mutex_unlock( &(ctl->locks->path) );
 
-		p->next = NULL;
-	}
-	else
-	{
-	  	++(ctl->mem->mem_paths);
-		pthread_mutex_unlock( &(ctl->locks->path) );
+	if( !ctl->mem->paths )
+        __mem_new_paths( NEW_PATHS_BLOCK_SZ );
 
-		p    = (PATH *) allocz( sizeof( PATH ) );
-		p->w = (WORDS *) allocz( sizeof( WORDS ) );
-	}
+	p = ctl->mem->paths;
+	ctl->mem->paths = p->next;
+	--(ctl->mem->free_paths);
+
+	pthread_mutex_unlock( &(ctl->locks->path) );
+
+	p->next = NULL;
 
 	// we use double the length because we may need two
 	// copies, one for strwords to eat

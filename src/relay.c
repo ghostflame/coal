@@ -110,12 +110,12 @@ void *relay_flush( void *arg )
 	// collect any points
 	relay_collect_points( d );
 
-	// and unlock
-	pthread_mutex_unlock( &(d->pt_ctl) );
-
 	// anything to do?
 	if( !d->outgoing )
+	{
+		pthread_mutex_unlock( &(d->pt_ctl) );
 		return NULL;
+	}
 
 	// process the list
 	while( d->outgoing )
@@ -129,6 +129,9 @@ void *relay_flush( void *arg )
 	// flush any remaining data
 	if( d->data->out.len )
 		net_write_data( d->data );
+
+	// and unlock
+	pthread_mutex_unlock( &(d->pt_ctl) );
 
 	return NULL;
 }
@@ -191,6 +194,142 @@ void relay_stop( void )
 		close( d->data->sock );
 		d->data->sock = -1;
 	}
+}
+
+
+void relay_pong( RDEST *d, uint32_t *sec, uint16_t *msec )
+{
+	int bytes = 0, tries = 0;
+
+	while( bytes < 16 && tries < 3 )
+	{
+		bytes += net_read_data( d->data );
+		if( bytes < 16 )
+		{
+			tries++;
+			usleep( 1000 );
+		}
+	}
+
+    if( tries >= 3 ) {
+        return;
+    }
+
+	// read the pong
+}
+
+
+void relay_ping( RDEST *d, uint32_t sec, uint16_t msec )
+{
+	uint8_t *uc;
+	uint32_t *ts;
+	uint16_t *ms;
+	NSOCK *n = d->data;
+
+	pthread_mutex_lock( &(d->pt_ctl) );
+
+	uc = n->out.buf;
+	*uc++ = 0x01;
+	*uc++ = BINF_TYPE_PING;
+
+	ms = (uint16_t *) uc;
+	*ms++ = 16;
+
+	ts = (uint32_t *) ms;
+	*ts++ = sec;
+	*ts++ = 0;
+
+	ms = (uint16_t *) ts;
+	*ms++ = msec;
+	*ms++ = 0;
+
+	n->out.len += 16;
+
+	net_write_data( d->data );
+
+	pthread_mutex_unlock( &(d->pt_ctl) );
+}
+
+
+
+
+void *relay_connection_watcher( void *arg )
+{
+	double when, recvd;
+	int rv, ping_sent;
+	struct pollfd p;
+	uint32_t its;
+	uint16_t ims;
+	RDEST *dst;
+	NSOCK *sk;
+	THRD *t;
+
+	t   = (THRD *) arg;
+	dst = (RDEST *) t->arg;
+	sk  = dst->data;
+	free( t );
+
+	ping_sent = 0;
+	p.fd      = sk->sock;
+	p.events  = POLL_EVENTS;
+
+	while( ctl->run_flags & RUN_LOOP )
+	{
+		if( sk->flags & HOST_CLOSE )
+			break;
+
+		if( sk->sock < 0 )
+		{
+			net_connect( sk );
+			usleep( 1000000 );
+			continue;
+		}
+
+		when = ctl->curr_time;
+		its  = (uint32_t) when;
+		ims  = (uint16_t) ( 1000.0 * ( when - (double) its ) );
+
+		if( !ping_sent )
+		{
+			// so sent a ping!
+			relay_ping( dst, its, ims );
+			ping_sent = 1;
+		}
+
+		rv = poll( &p, 1, 5000 );
+		if( rv < 0 )
+		{
+			if( errno != EINTR )
+			{
+			  	warn( "Error polling relay connection to %s -- %s",
+					dst->name, Err );
+				net_disconnect( &(sk->sock), dst->name );
+				debug( "Closed relay connection to %s.", dst->name );
+			}
+		}
+		else if( !rv )
+		{
+			warn( "No response from relay connection to %s.", dst->name );
+            continue;
+		}
+
+		relay_pong( dst, &its, &ims );
+		ping_sent = 0;
+        recvd  = (double) ims;
+        recvd /= 1000.0;
+        recvd += (double) its;
+
+		usleep( 2000000 );
+	}
+
+	if( shutdown( sk->sock, SHUT_RDWR ) )
+		err( "Shutdown error to relay %s -- %s", dst->name, Err );
+
+	close( sk->sock );
+	sk->sock = -1;
+	debug( "Closed relay connection to %s.", dst->name );
+
+	return NULL;
 }
 
 

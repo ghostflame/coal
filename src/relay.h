@@ -6,6 +6,8 @@
 #define RELAY_OUTBUF_SZ				0x10000	// 64k
 
 
+
+
 // created by a query connection
 struct relay_query_conn
 {

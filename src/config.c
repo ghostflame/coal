@@ -252,6 +252,8 @@ int get_config( char *inpath )
 		else
 			lrv = config_line( &av );
 
+        ret += lrv;
+
 		if( lrv )
 		{
 		  	err( "Bad config in file '%s', line %d",

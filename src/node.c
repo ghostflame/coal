@@ -200,6 +200,7 @@ int create_directory( NODE *n )
 		return -1;
 	}
 
+    ndebug( "Created node directory '%s'", n->dir_path );
 	node_add_flag( n, NODE_FLAG_CREATED );
 
 	return 0;
@@ -259,10 +260,14 @@ int node_write_single( NODE *n )
 	struct stat sb;
 	int leaf, ret;
 
+    ndebug( "Attempting node_write_single on '%s'", n->dir_path );
+
 	// we saw no created flag, so test properly this time
 	node_lock( n );
 	if( n->flags & (NODE_FLAG_CREATED|NODE_FLAG_CREATING|NODE_FLAG_ERROR) )
 	{
+        ndebug( "Aborting node_write_single on '%s' because of flags.",
+            n->dir_path );
 		node_unlock( n );
 		return 0;
 	}
@@ -326,7 +331,7 @@ void node_write( NODE *n )
 	if( !( n->flags & NODE_FLAG_CREATED ) )
 		node_write_single( n );
 
-	// move on
+	// move on - depth first
 	for( ch = n->children; ch; ch = ch->next )
 		node_write( ch );
 }
@@ -518,6 +523,7 @@ static int nr_cfg_count = 0;
 int node_routing_line( AVP *av )
 {
   	NODE_ROUTE *r;
+    regex_t retrgx;
 
 	if( !nr_cfg_curr )
 	{
@@ -584,8 +590,20 @@ int node_routing_line( AVP *av )
 			return -1;
 		}
 
-		// TODO
-		// sanity checking on retain strings
+        // should match all retention strings
+        if( regcomp( &retrgx, "^([0-9]+:[0-9]+[DdWwMmYy]?)(;[0-9]+:[0-9]+[DdWwMmYy]?)*$",
+                REG_EXTENDED|REG_NOSUB ) )
+        {
+            err( "Could not create retention regex." );
+            return -1;
+        }
+        if( regexec( &retrgx, av->val, 0, NULL, 0 ) )
+        {
+            err( "Invalid retention string '%s'", av->val );
+            regfree( &retrgx );
+            return -1;
+        }
+        regfree( &retrgx );
 
 		r->retain  = str_dup( av->val, av->vlen );
 		r->ret_len = av->vlen;

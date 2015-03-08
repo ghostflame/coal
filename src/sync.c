@@ -57,6 +57,9 @@ void sync_single_node( NODE *n )
 
 	// don't need these any more
 	free( c3p );
+
+    // and free the points up
+    mem_free_point_list( list );
 }
 
 
@@ -64,6 +67,9 @@ void sync_single_node( NODE *n )
 void sync_nodes( NODE *n )
 {
 	NODE *cn;
+
+    if( !( n->flags & NODE_FLAG_CREATED ) )
+        return;
 
 	if( n->flags & NODE_FLAG_LEAF )
 		sync_single_node( n );

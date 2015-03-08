@@ -17,6 +17,34 @@ one buffer, all comms have 4-byte alignment padding on the end.
 
 
 
+Binary Packet Types
+===================
+Type	Meaning
+0x02	Ping - request confirmation socket is alive
+0x03	Pong - response to a ping
+0x04	Data - a data record
+0x08	Query - request for data
+0x09	Query answer - response containing records
+0x10	Tree Query - request for path structure
+0x11	Tree answer - response containing nodes
+
+
+
+Ping/Pong Format
+================
+
+Offset	Size	Field
+0		1		Version
+1		1		Type
+2		2		Record size (ie size - 4 more bytes to read)
+4		4		(time_t) ping timestamp
+8		4		(time_t) pong timestamp (0 in a ping)
+12		2		(short int) ping msec
+14		2		(short int) pong msec
+
+
+
+
 Binary Data Format
 ==================
 
@@ -24,7 +52,7 @@ Input:
 
 Offset   Size     Field
 0        1        Version
-1        1        Type (1 = data, 8 = query, 9 = query answer, 16 = tree query, 17 = tree answer)
+1        1        Type
 2        2        Record size (ie, size - 4 more bytes to read)
 4        4        (time_t) timestamp
 8        4        (float) value
@@ -44,7 +72,7 @@ Input:
 
 Offset   Size     Field
 0        1        Version
-1        1        Type (1 = data, 8 = query, 9 = query answer, 16 = tree query, 17 = tree answer)
+1        1        Type
 2        2        Record size (ie, size - 4 more bytes to read)
 4        4        Start time (ignored in tree queries)
 8        4        End time (ignored in tree queries)
@@ -57,7 +85,7 @@ Output (tree query):
 
 Offset   Size     Field
 0        1        Version
-1        1        Type (1 = data, 8 = query, 9 = query answer, 16 = tree query, 17 = tree answer)
+1        1        Type
 2        2        Padding (record size not confined to 64k)
 4        4        Record size
 8        1        Requested node type (1 = leaf, 0 = branch)
@@ -90,7 +118,7 @@ Output (data query):
 
 Offset   Size     Field
 0        1        Version
-1        1        Type (1 = data, 8 = query, 9 = query answer, 16 = tree query, 17 = tree answer)
+1        1        Type
 2        2        Padding (record size not confined to 64k)
 4        4        Record size
 8        4        Start time of data (might not match query)

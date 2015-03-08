@@ -18,8 +18,9 @@
 
 #include <c3db.h>
 
-
-#define BINF_TYPE_DATA					0x02
+#define BINF_TYPE_PING					0x02
+#define BINF_TYPE_PONG					0x03
+#define BINF_TYPE_DATA					0x04
 #define BINF_TYPE_QUERY					0x08
 #define BINF_TYPE_QUERY_RET				0x09
 #define BINF_TYPE_TREE					0x10

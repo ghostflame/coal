@@ -2,6 +2,10 @@
 #define COAL_NET_H
 
 
+#define NEW_POINTS_BLOCK_SZ                 128
+#define NEW_PATHS_BLOCK_SZ                  128
+
+
 struct memory_control
 {
 	HOST		*	hosts;

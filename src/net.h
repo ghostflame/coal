@@ -113,6 +113,7 @@ void net_close_host( HOST *h );
 
 NSOCK *net_make_sock( int insz, int outsz, char *name, struct sockaddr_in *peer );
 int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog );
+void net_disconnect( int *sock, char *name );
 int net_connect( NSOCK *s );
 
 // r/w
