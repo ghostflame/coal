@@ -2,8 +2,6 @@
 #define COAL_DATA_H
 
 
-
-
 #define	LINE_SEPARATOR					'\n'
 #define	FIELD_SEPARATOR					' '
 #define	PATH_SEPARATOR					'.'
@@ -29,9 +27,9 @@ enum data_line_fields
 
 
 char *data_bin_type_names( int type );
-int data_path_parse( PATH *path );
-uint32_t data_path_cksum( char *str, int len );
-void data_add_path_cache( PATH *p, NODE *n, RDEST *d );
+
+data_read_fn data_line_read;
+data_read_fn data_bin_read;
 
 throw_fn push_loop;
 throw_fn data_loop;

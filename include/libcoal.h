@@ -18,13 +18,14 @@
 
 #include <c3db.h>
 
+#define BINF_TYPE_REPLY					0x01
+
 #define BINF_TYPE_PING					0x02
-#define BINF_TYPE_PONG					0x03
+#define BINF_TYPE_PONG					(BINF_TYPE_PING|BINF_TYPE_REPLY)
 #define BINF_TYPE_DATA					0x04
 #define BINF_TYPE_QUERY					0x08
-#define BINF_TYPE_QUERY_RET				0x09
-#define BINF_TYPE_TREE					0x10
-#define BINF_TYPE_TREE_RET				0x11
+#define BINF_TYPE_QUERY_RET				(BINF_TYPE_QUERY|BINF_TYPE_REPLY)
+
 
 
 // default ports
@@ -40,13 +41,14 @@
 #define COAL_QUERY_SLEEP_USEC			4000
 
 
+
 #ifndef Err
 #define Err strerror( errno )
 #endif
 
 
-typedef struct libcoal_handle       COALH;
-typedef struct libcoal_connection   COALCONN;
+typedef struct libcoal_handle		COALH;
+typedef struct libcoal_connection	COALCONN;
 typedef struct libcoal_point		COALPT;
 typedef struct libcoal_data_answer	COALDANS;
 typedef struct libcoal_tree_answer	COALTANS;
@@ -69,6 +71,16 @@ enum libcoal_errors
 	LCE_RECV_ERROR,
 	LCE_BAD_QANS,
 	LCE_MAX
+};
+
+
+enum libcoal_query_types
+{
+	QUERY_TYPE_INVALID = -1,
+	QUERY_TYPE_DATA,
+	QUERY_TYPE_TREE,
+	QUERY_TYPE_SEARCH,
+	QUERY_TYPE_MAX
 };
 
 
@@ -129,7 +141,8 @@ struct libcoal_query
 	char		*	path;
 	int				len;
 
-	int				tq;		// tree query
+	int				type;
+
 	int				state;
 	int				size;
 

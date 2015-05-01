@@ -1,5 +1,6 @@
 #include "coal.h"
 
+#define LLFID LLFRE
 
 void relay_collect_points( RDEST *d )
 {
@@ -189,7 +190,7 @@ void relay_stop( void )
 
 	for( d = ctl->relay->dests; d; d = d->next )
 	{
-		notice( "Shutting down destination '%s'", d->name );
+		notice( 0x0101, "Shutting down destination '%s'", d->name );
 		shutdown( d->data->sock, SHUT_RDWR );
 		close( d->data->sock );
 		d->data->sock = -1;
@@ -301,15 +302,15 @@ void *relay_connection_watcher( void *arg )
 		{
 			if( errno != EINTR )
 			{
-			  	warn( "Error polling relay connection to %s -- %s",
+			  	warn( 0x0201, "Error polling relay connection to %s -- %s",
 					dst->name, Err );
 				net_disconnect( &(sk->sock), dst->name );
-				debug( "Closed relay connection to %s.", dst->name );
+				debug( 0x0202, "Closed relay connection to %s.", dst->name );
 			}
 		}
 		else if( !rv )
 		{
-			warn( "No response from relay connection to %s.", dst->name );
+			warn( 0x0203, "No response from relay connection to %s.", dst->name );
             continue;
 		}
 
@@ -323,11 +324,11 @@ void *relay_connection_watcher( void *arg )
 	}
 
 	if( shutdown( sk->sock, SHUT_RDWR ) )
-		err( "Shutdown error to relay %s -- %s", dst->name, Err );
+		err( 0x0204, "Shutdown error to relay %s -- %s", dst->name, Err );
 
 	close( sk->sock );
 	sk->sock = -1;
-	debug( "Closed relay connection to %s.", dst->name );
+	debug( 0x0205, "Closed relay connection to %s.", dst->name );
 
 	return NULL;
 }
@@ -360,11 +361,11 @@ int relay_start( void )
 		// and connect to the relay destination
 		if( net_connect( d->data ) < 0 )
 		{
-			rerr( "Failed to connect to relay host %s.", d->name );
+			rerr( 0x0301, "Failed to connect to relay host %s.", d->name );
 			return -1;
 		}
 
-		rnotice( "Connected to relay host %s.", d->name );
+		rnotice( 0x0302, "Connected to relay host %s.", d->name );
 	}
 
 	return 0;
@@ -407,27 +408,27 @@ int relay_config_line( AVP *av )
 	{
 		if( d->name )
 		{
-			warn( "Relay destination '%s' also contains name '%s' - is a 'done' missing?",
+			warn( 0x0401, "Relay destination '%s' also contains name '%s' - is a 'done' missing?",
 				d->name, av->val );
 			return -1;
 		}
 
 		d->name = str_dup( av->val, av->vlen );
 
-		debug( "Relay destination %s config started.", d->name );
+		debug( 0x0402, "Relay destination %s config started.", d->name );
 	}
 	else if( attIs( "address" ) || attIs( "addr" ) )
 	{
 		if( !inet_aton( av->val, &(d->data_peer.sin_addr) ) )
 		{
-			warn( "Invalid IP address '%s' for relay destination %s",
+			warn( 0x0403, "Invalid IP address '%s' for relay destination %s",
 				av->val, ( d->name ) ? d->name : "as yet unnamed" );
 			return -1;
 		}
 		// and copy that for queries
 		d->query_peer.sin_addr = d->data_peer.sin_addr;
 
-		debug( "Relay destination %s has address %s",
+		debug( 0x0404, "Relay destination %s has address %s",
 			( d->name ) ? d->name : "as yet unnamed",
 			inet_ntoa( d->data_peer.sin_addr ) );
 	}
@@ -435,14 +436,14 @@ int relay_config_line( AVP *av )
 	{
 		d->data_peer.sin_port = htons( (uint16_t) strtoul( av->val, NULL, 10 ) );
 
-		debug( "Relay destination %s sends data to port %hu",
+		debug( 0x0405, "Relay destination %s sends data to port %hu",
 			( d->name ) ? d->name : "as yet unnamed", ntohs( d->data_peer.sin_port ) );
 	}
 	else if( attIs( "qport" ) )
 	{
 		d->query_peer.sin_port = htons( (uint16_t) strtoul( av->val, NULL, 10 ) );
 
-		debug( "Relay destination %s sends queries to port %hu",
+		debug( 0x0406, "Relay destination %s sends queries to port %hu",
 			( d->name ) ? d->name : "as yet unnamed", ntohs( d->query_peer.sin_port ) );
 	}
 	else if( attIs( "type" ) )
@@ -459,7 +460,7 @@ int relay_config_line( AVP *av )
 		}
 		else
 		{
-			warn( "Unrecognised relay communications type '%s'", av->val );
+			warn( 0x0407, "Unrecognised relay communications type '%s'", av->val );
 			return -1;
 		}
 	}
@@ -468,7 +469,7 @@ int relay_config_line( AVP *av )
 		d->qcount = atoi( av->val );
 		if( d->qcount < 1 || d->qcount > 32 )
 		{
-			warn( "Invalid queues (%d) for relay destination %s - allowed values 1-32",
+			warn( 0x0408, "Invalid queues (%d) for relay destination %s - allowed values 1-32",
 				d->qcount, ( d->name ) ? d->name : "as yet unnamed" );
 			return -1;
 		}
@@ -481,7 +482,7 @@ int relay_config_line( AVP *av )
 	{
 		if( !d->name )
 		{
-			warn( "Cannot process unnamed relay destination block." );
+			warn( 0x0409, "Cannot process unnamed relay destination block." );
 			return -1;
 		}
 
@@ -490,7 +491,7 @@ int relay_config_line( AVP *av )
 			// attempt lookup on name as a hostname
 			if( !( he = gethostbyname( d->name ) ) )
 			{
-				warn( "Failed to look up relay destination '%s' -- %s",
+				warn( 0x040a, "Failed to look up relay destination '%s' -- %s",
 					d->name, Err );
 				return -1;
 			}
@@ -498,7 +499,7 @@ int relay_config_line( AVP *av )
 			inet_aton( he->h_addr, &(d->data_peer.sin_addr) );
 			d->query_peer.sin_addr = d->data_peer.sin_addr;
 
-			debug( "Converted relay name %s to IP address %s",
+			debug( 0x040b, "Converted relay name %s to IP address %s",
 				d->name, inet_ntoa( d->data_peer.sin_addr ) );
 		}
 
@@ -514,7 +515,7 @@ int relay_config_line( AVP *av )
 			else
 				d->data_peer.sin_port = htons( DEFAULT_NET_BIN_DATA_PORT );
 
-			debug( "Relay destination %s defaulting to port %hu for data",
+			debug( 0x040c, "Relay destination %s defaulting to port %hu for data",
 				d->name, ntohs( d->data_peer.sin_port ) );
 		}
 		if( !d->query_peer.sin_port )
@@ -524,7 +525,7 @@ int relay_config_line( AVP *av )
 			else
 				d->query_peer.sin_port = htons( DEFAULT_NET_BIN_QUERY_PORT );
 
-			debug( "Relay destination %s defaulting to port %hu for queries",
+			debug( 0x040d, "Relay destination %s defaulting to port %hu for queries",
 				d->name, ntohs( d->query_peer.sin_port ) );
 		}
 
@@ -533,7 +534,7 @@ int relay_config_line( AVP *av )
 		ctl->relay->dests = d;
 		ctl->relay->dcount++;
 
-		debug( "Relay destination %s created.", d->name );
+		debug( 0x040e, "Relay destination %s created.", d->name );
 
 		// and flatten the static
 		rd_cfg_curr = NULL;
@@ -554,3 +555,6 @@ REL_CTL *relay_config_defaults( void )
 
 	return r;
 }
+
+#undef LLFID
+

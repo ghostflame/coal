@@ -1,5 +1,7 @@
 #include "coal.h"
 
+#define LLFID LLFCF
+
 CCTXT *ctxt_top = NULL;
 CCTXT *context  = NULL;
 
@@ -32,7 +34,7 @@ int config_get_line( FILE *f, AVP *av )
 		{
 			if( !( e = memchr( __cfg_read_line, ']', n - __cfg_read_line ) ) )
 			{
-				warn( "Bad section heading in file '%s': %s",
+				warn( 0x0101, "Bad section heading in file '%s': %s",
 					context->file, __cfg_read_line );
 				return -1;
 			}
@@ -40,7 +42,7 @@ int config_get_line( FILE *f, AVP *av )
 
 			if( ( e - __cfg_read_line ) > 511 )
 			{
-				warn( "Over-long section heading in file '%s': %s",
+				warn( 0x0102, "Over-long section heading in file '%s': %s",
 					context->file, __cfg_read_line );
 				return -1;
 			}
@@ -192,7 +194,7 @@ int get_config( char *inpath )
 	// check this isn't a duplicate
 	if( config_file_dupe( ctxt_top, path ) )
 	{
-		warn( "Skipping duplicate config file '%s'.", path );
+		warn( 0x0201, "Skipping duplicate config file '%s'.", path );
 		free( path );
 		return 0;
 	}
@@ -200,7 +202,7 @@ int get_config( char *inpath )
 	// set up our new context
   	context = config_make_context( path, context );
 
-	debug( "Opening config file %s, section %s",
+	debug( 0x0202, "Opening config file %s, section %s",
 		path, context->section );
 
 	// is this the first call
@@ -210,7 +212,7 @@ int get_config( char *inpath )
 	// die on not reading main config file, warn on others
 	if( !( fh = fopen( path, "r" ) ) )
 	{
-		err( "Could not open config file '%s' -- %s", path, Err );
+		err( 0x0203, "Could not open config file '%s' -- %s", path, Err );
 	  	ret = -1;
 		goto END_FILE;
 	}
@@ -227,7 +229,7 @@ int get_config( char *inpath )
 		{
 			if( get_config( av.val ) != 0 )
 			{
-				err( "Included config file '%s' invalid.",
+				err( 0x0204, "Included config file '%s' invalid.",
 					av.val );
 				goto END_FILE;
 			}
@@ -241,14 +243,16 @@ int get_config( char *inpath )
 		  	lrv = net_config_line( &av );
 		else if( secIs( "node" ) )
 			lrv = node_config_line( &av );
+		else if( secIs( "query" ) )
+			lrv = query_config_line( &av );
 		else if( secIs( "routing" ) )
 			lrv = node_routing_line( &av );
-		else if( secIs( "sync" ) )
-			lrv = sync_config_line( &av );
 		else if( secIs( "relay" ) )
 		 	lrv = relay_config_line( &av );
 		else if( secIs( "stats" ) )
 			lrv = stats_config_line( &av );
+		else if( secIs( "sync" ) )
+			lrv = sync_config_line( &av );
 		else
 			lrv = config_line( &av );
 
@@ -256,7 +260,7 @@ int get_config( char *inpath )
 
 		if( lrv )
 		{
-		  	err( "Bad config in file '%s', line %d",
+		  	err( 0x0205, "Bad config in file '%s', line %d",
 				context->file, context->lineno );
 			goto END_FILE;
 		}
@@ -267,7 +271,7 @@ END_FILE:
 	if( fh )
 		fclose( fh );
 
-	debug( "Finished with config file '%s': %d", context->file, ret );
+	debug( 0x0206, "Finished with config file '%s': %d", context->file, ret );
 
 	// step our context back
 	context = context->parent;
@@ -297,14 +301,14 @@ int config_check_relay( void )
 			{
 				n->dest = d;
 
-				debug( "Routing block '%s' matched to destination '%s'",
+				debug( 0x0301, "Routing block '%s' matched to destination '%s'",
 					n->name, d->name );
 				break;
 			}
 
 		if( !n->dest )
 		{
-			err( "Could not find routing policy %s relay target '%s' in relay config.",
+			err( 0x0302, "Could not find routing policy %s relay target '%s' in relay config.",
 				n->name, n->relay );
 			return -1;
 		}
@@ -331,6 +335,7 @@ COAL_CTL *create_config( void )
 	c->sync        = sync_config_defaults( );
 	c->stats       = stats_config_defaults( );
 	c->relay       = relay_config_defaults( );
+	c->query       = query_config_defaults( );
 
 	c->pidfile     = strdup( DEFAULT_PID_FILE );
 	c->basedir     = strdup( DEFAULT_BASE_DIR );
@@ -339,5 +344,5 @@ COAL_CTL *create_config( void )
 	return c;
 }
 
-
+#undef LLFID
 

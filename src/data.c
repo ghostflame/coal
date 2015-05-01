@@ -1,5 +1,7 @@
 #include "coal.h"
 
+#define LLFID LLFDA
+
 
 char *data_bin_type_names( int type )
 {
@@ -9,12 +11,8 @@ char *data_bin_type_names( int type )
 			return "data";
 		case BINF_TYPE_QUERY:
 			return "query";
-		case BINF_TYPE_QUERY_RET:
+		case (BINF_TYPE_QUERY|BINF_TYPE_REPLY):
 			return "query answer";
-		case BINF_TYPE_TREE:
-			return "tree query";
-		case BINF_TYPE_TREE_RET:
-			return "tree answer";
 	}
 
 	return "unknown";
@@ -22,32 +20,11 @@ char *data_bin_type_names( int type )
 
 
 
-
-int data_path_parse( PATH *p )
-{
-	// make a copy for strwords to eat
-	p->copy = p->str + p->len + 1;
-	memcpy( p->copy, p->str, p->len );
-	// have to cap it, this might not be virgin memory
-	*(p->copy + p->len) = '\0';
-
-	if( strwords( p->w, p->copy, p->len, PATH_SEPARATOR ) < 0 )
-	{
-		warn( "Could not parse path '%s'", p->str );
-		p->copy = NULL;
-
-		return -1;
-	}
-
-	return p->w->wc;
-}
-
-
 // check what to do with a point
 void data_point_to_node( NODE *n, POINT *p )
 {
 	if( n->flags & NODE_FLAG_RELAY )
-	  	relay_add_point( n->policy->dest, p );
+		relay_add_point( n->policy->dest, p );
 	else
 		node_add_point( n, p );
 }
@@ -99,107 +76,23 @@ void data_point( POINT *p, PATH *path, NODE *parent )
 
 
 
-static uint32_t data_cksum_primes[8] =
-{
-	2909, 3001, 3083, 3187, 3259, 3343, 3517, 3581
-};
-
-
-uint32_t data_path_cksum( char *str, int len )
-{
-#ifdef CKSUM_64BIT
-	register uint64_t *p, sum = 0xbeef;
-#else
-	register uint32_t *p, sum = 0xbeef;
-#endif
-	int rem;
-
-#ifdef CKSUM_64BIT
-	rem = len & 0x7;
-	len = len >> 3;
-
-	for( p = (uint64_t *) str; len > 0; len-- )
-#else
-	rem = len & 0x3;
-	len = len >> 2;
-
-	for( p = (uint32_t *) str; len > 0; len-- )
-#endif
-
-		sum ^= *p++;
-
-	// and capture the rest
-	str = (char *) p;
-	while( rem-- > 0 )
-		sum += *str++ * data_cksum_primes[rem];
-
-	return sum;
-}
-
 
 // as fast as possible here - this is the happy path
 // for finding where to send a point
 int data_route_point( POINT *p )
 {
-	register PCACHE *pc;
-  	uint32_t sum, hval;
-
-	sum  = data_path_cksum( p->path->str, p->path->len );
-	hval = sum % ctl->node->pcache_sz;
-
-	for( pc = ctl->node->pcache[hval]; pc; pc = pc->next )
-		if( pc->sum == sum
-		 && pc->len == p->path->len
-		 && !memcmp( pc->path, p->path->str, pc->len ) )
-		{
-			if( pc->relay )
-				relay_add_point( pc->target.dest, p );
-			else
-				node_add_point( pc->target.node, p );
-			return 0;
-		}
-
-	return -1;
-}
-
-
-
-
-void data_add_path_cache( PATH *p, NODE *n, RDEST *d )
-{
-	uint32_t hval;
 	PCACHE *pc;
 
-	pc       = (PCACHE *) allocz( sizeof( PCACHE ) );
-	pc->len  = p->len;
-	pc->path = str_dup( p->str, pc->len );
-	pc->sum  = data_path_cksum( pc->path, pc->len );
+	if( !( pc = node_find_pcache( p->path ) ) )
+		return -1;
 
-	if( n )
-		pc->target.node = n;
+	if( pc->relay )
+		relay_add_point( pc->target.dest, p );
 	else
-	{
-		pc->target.dest = d;
-		pc->relay       = 1;
-	}
+		node_add_point( pc->target.node, p );
 
-	hval = pc->sum % ctl->node->pcache_sz;
-
-	pthread_mutex_lock( &(ctl->locks->cache) );
-
-	pc->next = ctl->node->pcache[hval];
-	ctl->node->pcache[hval] = pc;
-
-	if( n )
-	{
-		ndebug( "Node %u added to path cache at position %u",
-			n->id, hval );
-	}
-
-	pthread_mutex_unlock( &(ctl->locks->cache) );
+	return 0;
 }
-
-
 
 
 
@@ -251,39 +144,39 @@ void grab_incoming( POINT **list )
 // write a pong immediately
 void data_pong( HOST *h, void *buf, int len )
 {
-    uint32_t *ul, ts;
-    uint16_t *us, ms;
-    uint8_t *uc;
-    double ct;
+	uint32_t *ul, ts;
+	uint16_t *us, ms;
+	uint8_t *uc;
+	double ct;
 
-    ts = *((uint32_t *) (buf + 4));
-    ms = *((uint16_t *) (buf + 12));
-    ct = timedbl( NULL );
+	ts = *((uint32_t *) (buf + 4));
+	ms = *((uint16_t *) (buf + 12));
+	ct = timedbl( NULL );
 
-    uc = (uint8_t *) (h->net->out.buf + h->net->out.len);
+	uc = (uint8_t *) (h->net->out.buf + h->net->out.len);
 
-    *uc++ = 0x01;
-    *uc++ = BINF_TYPE_PONG;
-    us    = (uint16_t *) uc;
-    *us++ = 12;
-    ul    = (uint32_t *) us;
-    *ul++ = ts;
-    *ul++ = (uint32_t) ct;
-    us    = (uint16_t *) ul;
-    *us++ = ms;
-    // get msec
-    ct   -= (uint32_t) ct; 
-    ct   *= 1000;
-    *us++ = (uint16_t) ct;
+	*uc++ = 0x01;
+	*uc++ = BINF_TYPE_PONG;
+	us    = (uint16_t *) uc;
+	*us++ = 12;
+	ul    = (uint32_t *) us;
+	*ul++ = ts;
+	*ul++ = (uint32_t) ct;
+	us    = (uint16_t *) ul;
+	*us++ = ms;
+	// get msec
+	ct   -= (uint32_t) ct; 
+	ct   *= 1000;
+	*us++ = (uint16_t) ct;
 
-    h->net->out.len += 16;
-    net_write_data( h->net );
+	h->net->out.len += 16;
+	net_write_data( h->net );
 }
 
 
 
-
-POINT *data_bin_fetch( HOST *h )
+//fnid 3
+POINT *data_bin_read( HOST *h )
 {
 	int i, len, type;
 	POINT *list, *p;
@@ -298,19 +191,19 @@ POINT *data_bin_fetch( HOST *h )
 			buf  = h->all->wd[i];
 			len  = h->all->len[i];
 
-            // read the type
-            type = (int) *((uint8_t *) (buf + 1));
+			// read the type
+			type = (int) *((uint8_t *) (buf + 1));
 
-            // just respond to pings
-            if( type == BINF_TYPE_PING )
-            {
-                data_pong( h, buf, len );
-                continue;
-            }
+			// just respond to pings
+			if( type == BINF_TYPE_PING )
+			{
+				data_pong( h, buf, len );
+				continue;
+			}
 
 			if( type != BINF_TYPE_DATA )
 			{
-				warn( "Received type %d/%s from host %s on data bin connection.",
+				warn( 0x0301, "Received type %d/%s from host %s on data bin connection.",
 					type, data_bin_type_names( type ), h->net->name );
 				h->net->flags |= HOST_CLOSE;
 				return NULL;
@@ -321,20 +214,6 @@ POINT *data_bin_fetch( HOST *h )
 			p->data.val = *((float *)  ( buf + 8 ));
 			p->path     = mem_new_path( (char *) ( buf + 12 ), len - 13 );
 
-			if( data_route_point( p ) == 0 )
-			{
-				++(h->points);
-				continue;
-			}
-
-			if( data_path_parse( p->path ) <= 0 )
-			{
-				info( "Invalid path string: '%s'", (char *) ( buf + 12 ) );
-				// frees the path
-				mem_free_point( &p );
-				continue;
-			}
-
 			p->next = list;
 			list    = p;
 		}
@@ -342,75 +221,8 @@ POINT *data_bin_fetch( HOST *h )
 	return list;
 }
 
-
-void data_bin_connection( HOST *h )
-{
-	POINT *incoming, *inc_end, *vals, *pt;
-	struct pollfd p;
-	double lastPush;
-	int rv;
-
-	p.fd     = h->net->sock;
-	p.events = POLL_EVENTS;
-	lastPush = ctl->curr_time;
-	incoming = NULL;
-	inc_end  = NULL;
-
-	while( ctl->run_flags & RUN_LOOP )
-	{
-		if( ( ctl->curr_time - lastPush ) > 1.0 )
-		{
-			if( incoming && inc_end )
-			{
-				queue_up_incoming( incoming, inc_end );
-				inc_end = incoming = NULL;
-			}
-
-			lastPush = ctl->curr_time;
-		}
-
-		// timeout is responsiveness to RUN_LOOP
-		if( ( rv = poll( &p, 1, 500 ) ) < 0 )
-		{
-			if( errno != EINTR )
-			{
-				warn( "Poll error talking to host %s -- %s",
-					h->net->name, Err );
-				break;
-			}
-		}
-		else if( !rv )
-			continue;
-
-		// are they going away?
-		if( p.revents & POLLHUP )
-			break;
-
-		if( ( vals = data_bin_fetch( h ) ) )
-		{
-			for( pt = vals; pt->next; pt = pt->next )
-				h->points++;
-
-			if( incoming )
-				pt->next = incoming;
-			else
-				inc_end  = pt;
-
-			incoming = vals;
-		}
-
-		// allows data_bin_fetch to signal to us to close the host
-		if( h->net->flags & HOST_CLOSE )
-			break;
-	}
-
-	if( incoming && inc_end )
-		queue_up_incoming( incoming, inc_end );	
-}
-
-
-
-POINT *data_line_fetch( HOST *h )
+//fnid 4
+POINT *data_line_read( HOST *h )
 {
 	POINT *list, *p;
 	int i, len;
@@ -426,7 +238,7 @@ POINT *data_line_fetch( HOST *h )
 
 			if( strwords( h->val, wd, len, FIELD_SEPARATOR ) != DATA_FIELD_COUNT )
 			{
-				debug( "Invalid line from data host %s", h->net->name );
+				debug( 0x0401, "Invalid line from data host %s", h->net->name );
 				continue;
 			}
 
@@ -434,27 +246,7 @@ POINT *data_line_fetch( HOST *h )
 			p->data.val = atof( h->val->wd[DATA_FIELD_VALUE] );
 			p->data.ts  = (time_t) strtoul( h->val->wd[DATA_FIELD_TS], NULL, 10 );
 			p->path     = mem_new_path( h->val->wd[DATA_FIELD_PATH],
-			                             h->val->len[DATA_FIELD_PATH] );
-
-			// try it the quick way - pcache
-			if( data_route_point( p ) == 0 )
-			{
-				++(h->points);
-				continue;
-			}
-
-			// ass - do it the slow way
-			if( data_path_parse( p->path ) <= 0 )
-			{
-				info( "Invalid path string: '%s'",
-					h->val->wd[DATA_FIELD_PATH] );
-				// frees the path
-				mem_free_point( &p );
-				continue;
-			}
-
-			// don't double-count!
-			//++(h->points);
+			                            h->val->len[DATA_FIELD_PATH] );
 
 			p->next = list;
 			list    = p;
@@ -464,10 +256,10 @@ POINT *data_line_fetch( HOST *h )
 }
 
 
-
-void data_line_connection( HOST *h )
+// fnid 5
+void data_handle_connection( HOST *h )
 {
-	POINT *incoming, *inc_end, *vals, *pt;
+	POINT *incoming, *end, *vals, *pt;
 	struct pollfd p;
 	double lastPush;
 	int rv;
@@ -476,16 +268,17 @@ void data_line_connection( HOST *h )
 	p.events = POLL_EVENTS;
 	lastPush = ctl->curr_time;
 	incoming = NULL;
-	inc_end  = NULL;
+	end      = NULL;
+
 
 	while( ctl->run_flags & RUN_LOOP )
 	{
 		if( ( ctl->curr_time - lastPush ) > 1.0 )
 		{
-			if( incoming && inc_end )
+			if( incoming && end )
 			{
-				queue_up_incoming( incoming, inc_end );
-				inc_end = incoming = NULL;
+				queue_up_incoming( incoming, end );
+				end = incoming = NULL;
 			}
 
 			lastPush = ctl->curr_time;
@@ -494,31 +287,64 @@ void data_line_connection( HOST *h )
 		// timeout is responsiveness to RUN_LOOP
 		if( ( rv = poll( &p, 1, 500 ) ) < 0 )
 		{
-			if( errno != EINTR )
-			{
-				warn( "Poll error talking to host %s -- %s",
-					h->net->name, Err );
-				break;
-			}
+			// don't sweat an interrupted poll call
+			if( errno == EINTR )
+				continue;
+
+			warn( 0x0501, "Poll error talking to host %s -- %s",
+				h->net->name, Err );
+			break;
 		}
+
 		else if( !rv )
 			continue;
 
 		// are they going away?
 		if( p.revents & POLLHUP )
-		  	break;
+			break;
 
-		if( ( vals = data_line_fetch( h ) ) )
+		// try to get some data
+		vals = (*(h->drf))( h );
+
+		// let's see what happened
+		while( vals )
 		{
-			for( pt = vals; pt->next; pt = pt->next )
-				h->points++;
+			pt   = vals;
+			vals = pt->next;
 
-			if( incoming )
-				pt->next = incoming;
+			pt->next = NULL;
+
+			// try it the quick way - pcache
+			if( data_route_point( pt ) == 0 )
+			{
+				++(h->points);
+				continue;
+			}
+
+			// ass - do it the slow way
+			if( node_path_parse( pt->path ) <= 0 )
+			{
+				info( 0x0502, "Invalid path string: '%s'",
+					h->val->wd[DATA_FIELD_PATH] );
+				// frees the path
+				mem_free_point( &pt );
+				continue;
+			}
+
+			h->points++;
+
+			// either start the list
+			// or append it
+			if( !incoming )
+			{
+				incoming = pt;
+				end      = pt;
+			}
 			else
-			  	inc_end  = pt;
-
-			incoming = vals;
+			{
+				end->next = pt;
+				end       = pt;
+			}
 		}
 
 		// allows data_fetch to signal us to close the host
@@ -527,13 +353,12 @@ void data_line_connection( HOST *h )
 	}
 
 	// push, synchronous
-	if( incoming && inc_end )
-		queue_up_incoming( incoming, inc_end );
+	if( incoming && end )
+		queue_up_incoming( incoming, end );
 }
 
 
-
-
+// fnid 6
 void *data_connection( void *arg )
 {
 	THRD *t;
@@ -542,23 +367,15 @@ void *data_connection( void *arg )
 	t = (THRD *) arg;
 	h = (HOST *) t->arg;
 
-	info( "Accepted data connection from host %s", h->net->name );
+	info( 0x0601, "Accepted data connection from host %s", h->net->name );
 
 	// make sure we can be cancelled
 	pthread_setcancelstate( PTHREAD_CANCEL_ENABLE, NULL );
 	pthread_setcanceltype( PTHREAD_CANCEL_ASYNCHRONOUS, NULL );
 
-	switch( h->type )
-	{
-		case NET_COMM_LINE:
-			data_line_connection( h );
-		case NET_COMM_BIN:
-			data_bin_connection( h );
-		default:
-			break;
-	}
+	data_handle_connection( h );
 
-	info( "Closing connection from host %s after %lu data points.",
+	info( 0x0602, "Closing connection from host %s after %lu data points.",
 				h->net->name, h->points );
 
 	net_close_host( h );
@@ -601,7 +418,7 @@ void *push_loop( void *arg )
 }
 
 
-
+// fnid 7
 void *data_loop( void *arg )
 {
 	NET_TYPE_CTL *ntc;
@@ -627,7 +444,7 @@ void *data_loop( void *arg )
 		{
 			if( errno != EINTR )
 			{
-				err( "Poll error on data socket -- %s", Err );
+				err( 0x0701, "Poll error on data socket -- %s", Err );
 				loop_end( "polling error on data hosts" );
 				break;
 			}
@@ -652,4 +469,5 @@ void *data_loop( void *arg )
 }
 
 
+#undef LLFID
 

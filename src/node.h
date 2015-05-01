@@ -80,6 +80,15 @@ struct node_routing
 };
 
 
+struct node_list
+{
+	NLIST			*	next;
+	NODE			**	nodes;
+	int					sz;
+	int					used;
+};
+
+
 
 struct node_data
 {
@@ -150,7 +159,26 @@ struct node_control
 #define node_leaf_str( _n )		( ( _n->flags & NODE_FLAG_LEAF ) ? "leaf" : "branch" )
 
 
+// for making lists of nodes, used by query
+void node_add_to_list( NLIST **list, NODE *n );
+NODE **node_flatten_list( NLIST *list, int *ncount );
 
+// calculate the hash value for a path
+uint32_t node_path_cksum( char *str, int len );
+
+// find something in the pcache
+PCACHE *node_find_pcache( PATH *p );
+
+// add something to the path cache
+void node_add_pcache( PATH *p, NODE *n, RDEST *d );
+
+// break up a path into a words structure
+int node_path_parse( PATH *p );
+
+// track down a node
+NODE *node_find( PATH *p );
+
+// create a node
 NODE *node_create( char *name, int len, NODE *parent, PATH *p, int leaf );
 
 

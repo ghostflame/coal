@@ -1,5 +1,7 @@
 #include "coal.h"
 
+#define LLFID LLFNE
+
 /*
  * Watched sockets
  *
@@ -27,7 +29,7 @@ void *net_watched_socket( void *arg )
 
 	// capture the start time - it's sort of a thread id
 	stime = h->started;
-	debug( "Connection from %s starts at %.6f", h->net->name, stime );
+	debug( 0x0101, "Connection from %s starts at %.6f", h->net->name, stime );
 
 	// capture the thread ID of the watched thread
 	// when throwing the handler function
@@ -39,7 +41,7 @@ void *net_watched_socket( void *arg )
 		// safe because we never destroy host structures
 		if( h->started != stime )
 		{
-            debug( "Socket has been freed or re-used." );
+            debug( 0x0102, "Socket has been freed or re-used." );
 			break;
 		}
 
@@ -48,7 +50,7 @@ void *net_watched_socket( void *arg )
 		{
 			// cancel that thread
 			//pthread_cancel( nt );
-			notice( "Connection from host %s timed out.", h->net->name );
+			notice( 0x0103, "Connection from host %s timed out.", h->net->name );
             h->net->flags |= HOST_CLOSE;
 			// net_close_host( h );
 			break;
@@ -58,7 +60,7 @@ void *net_watched_socket( void *arg )
 		usleep( 200000 );
 	}
 
-	debug( "Watcher of thread %lu, exiting." );
+	debug( 0x0104, "Watcher of thread %lu, exiting." );
 	free( t );
 	return NULL;
 }
@@ -67,7 +69,7 @@ void *net_watched_socket( void *arg )
 void net_disconnect( int *sock, char *name )
 {
 	if( shutdown( *sock, SHUT_RDWR ) )
-		err( "Shutdown error on connection with %s -- %s",
+		err( 0x0201, "Shutdown error on connection with %s -- %s",
 			name, Err );
 
 	close( *sock );
@@ -78,7 +80,7 @@ void net_disconnect( int *sock, char *name )
 void net_close_host( HOST *h )
 {
 	net_disconnect( &(h->net->sock), h->net->name );
-	debug( "Closed connection from host %s.", h->net->name );
+	debug( 0x0301, "Closed connection from host %s.", h->net->name );
 
 	mem_free_host( &h );
 }
@@ -96,7 +98,7 @@ HOST *net_get_host( int sock, int type )
 	if( ( d = accept( sock, (struct sockaddr *) &from, &sz ) ) < 0 )
 	{
 		// broken
-		err( "Accept error -- %s", Err );
+		err( 0x0401, "Accept error -- %s", Err );
 		return NULL;
 	}
 
@@ -111,6 +113,18 @@ HOST *net_get_host( int sock, int type )
 	// should be a unique timestamp
 	h->started   = timedbl( NULL );
 	h->last      = h->started;
+
+	switch( type )
+	{
+		case NET_COMM_LINE:
+			h->qrf = &query_line_read;
+			h->drf = &data_line_read;
+			break;
+		case NET_COMM_BIN:
+			h->qrf = &query_bin_read;
+			h->drf = &data_bin_read;
+			break;
+	}
 
 	return h;
 }
@@ -155,7 +169,7 @@ int net_connect( NSOCK *s )
 
 	if( s->sock != -1 )
 	{
-		warn( "Net connect called on connected socket - disconnecting." );
+		warn( 0x0501, "Net connect called on connected socket - disconnecting." );
 		shutdown( s->sock, SHUT_RDWR );
 		close( s->sock );
 		s->sock = -1;
@@ -168,14 +182,14 @@ int net_connect( NSOCK *s )
 
 	if( ( s->sock = socket( AF_INET, SOCK_STREAM, 0 ) ) < 0 )
 	{
-		err( "Unable to make tcp socket for %s -- %s",
+		err( 0x0502, "Unable to make tcp socket for %s -- %s",
 			label, Err );
 		return -1;
 	}
 
 	if( setsockopt( s->sock, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof( int ) ) )
 	{
-		err( "Unable to set keepalive on socket for %s -- %s",
+		err( 0x0503, "Unable to set keepalive on socket for %s -- %s",
 			label, Err );
 		close( s->sock );
 		s->sock = -1;
@@ -184,7 +198,7 @@ int net_connect( NSOCK *s )
 
 	if( connect( s->sock, s->peer, sizeof( struct sockaddr_in ) ) < 0 )
 	{
-		err( "Unable to connect to %s:%hu for %s -- %s",
+		err( 0x0504, "Unable to connect to %s:%hu for %s -- %s",
 			inet_ntoa( s->peer->sin_addr ), ntohs( s->peer->sin_port ),
 			label, Err );
 		close( s->sock );
@@ -192,7 +206,7 @@ int net_connect( NSOCK *s )
 		return -1;
 	}
 
-	info( "Connected (%d) to remote host %s:%hu for %s.",
+	info( 0x0506, "Connected (%d) to remote host %s:%hu for %s.",
 		s->sock, inet_ntoa( s->peer->sin_addr ),
 		ntohs( s->peer->sin_port ), label );
 
@@ -209,7 +223,7 @@ int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog )
 
 	if( ( s = socket( AF_INET, SOCK_STREAM, 0 ) ) < 0 )
 	{
-		err( "Unable to make tcp socket for %s -- %s",
+		err( 0x0601, "Unable to make tcp socket for %s -- %s",
 			pc->label, Err );
 		return -1;
 	}
@@ -217,7 +231,7 @@ int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog )
 	so = 1;
 	if( setsockopt( s, SOL_SOCKET, SO_REUSEADDR, &so, sizeof( int ) ) )
 	{
-		err( "Set socket options error for %s -- %s",
+		err( 0x0602, "Set socket options error for %s -- %s",
 			pc->label, Err );
 		close( s );
 		return -2;
@@ -235,7 +249,7 @@ int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog )
 		// try to bind
 		if( bind( s, (struct sockaddr *) &sa, sizeof( struct sockaddr_in ) ) < 0 )
 		{
-			err( "Bind to %s:%hu failed for %s -- %s",
+			err( 0x0603, "Bind to %s:%hu failed for %s -- %s",
 				inet_ntoa( sa.sin_addr ), pc->port, pc->label, Err );
 			close( s );
 			return -3;
@@ -246,12 +260,12 @@ int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog )
 
 		if( listen( s, backlog ) < 0 )
 		{
-			err( "Listen error for %s -- %s", pc->label, Err );
+			err( 0x0604, "Listen error for %s -- %s", pc->label, Err );
 			close( s );
 			return -4;
 		}
 
-		info( "Listening on port %hu for %s", pc->port, pc->label );
+		info( 0x0605, "Listening on port %hu for %s", pc->port, pc->label );
 	}
 
 	return s;
@@ -273,7 +287,7 @@ int net_write_data( NSOCK *s )
 	{
 		if( ( rv = poll( &p, 1, 20 ) ) < 0 )
 		{
-			warn( "Poll error writing to host %s -- %s",
+			warn( 0x0701, "Poll error writing to host %s -- %s",
 				s->name, Err );
 			s->flags |= HOST_CLOSE;
 			return -1;
@@ -291,7 +305,7 @@ int net_write_data( NSOCK *s )
 
 		if( ( b = send( s->sock, ptr, s->out.len, 0 ) ) < 0 )
 		{
-			warn( "Error writing to host %s -- %s",
+			warn( 0x0702, "Error writing to host %s -- %s",
 				s->name, Err );
 			s->flags |= HOST_CLOSE;
 			return -2;
@@ -305,7 +319,7 @@ int net_write_data( NSOCK *s )
 	if( s->out.len < 0 )
 		s->out.len = 0;
 
-	//debug( "Wrote to %d bytes to %d/%s", ( ptr - s->out.buf ), s->sock, s->name );
+	//debug( 0x0703, "Wrote to %d bytes to %d/%s", ( ptr - s->out.buf ), s->sock, s->name );
 
 	// what we wrote
 	return ptr - s->out.buf;
@@ -353,7 +367,7 @@ int net_read_data( NSOCK *s )
 		if( errno != EAGAIN
 		 && errno != EWOULDBLOCK )
 		{
-			err( "Recv error for host %s -- %s",
+			err( 0x0801, "Recv error for host %s -- %s",
 				s->name, Err );
 			s->flags |= HOST_CLOSE;
 			return 0;
@@ -364,7 +378,7 @@ int net_read_data( NSOCK *s )
 	// got some data then
 	s->in.len += i;
 
-	//debug( "Received %d bytes on socket %d/%s", i, s->sock, s->name );
+	//debug( 0x0802, "Received %d bytes on socket %d/%s", i, s->sock, s->name );
 
 	return i;
 }
@@ -412,7 +426,7 @@ int net_read_bin( HOST *h )
 		// we only know version 1 so far
 		if( ver != 1 )
 		{
-			warn( "Invalid version (%d) from host %s.",
+			warn( 0x0901, "Invalid version (%d) from host %s.",
 				ver, n->name );
 			n->flags |= HOST_CLOSE;
 			return h->all->wc;
@@ -475,7 +489,7 @@ int net_read_lines( HOST *h )
 
 	if( strwords( h->all, (char *) n->in.buf, n->in.len, LINE_SEPARATOR ) < 0 )
 	{
-		debug( "Invalid buffer from data host %s.", n->name );
+		debug( 0x0a01, "Invalid buffer from data host %s.", n->name );
 		return -1;
 	}
 
@@ -556,11 +570,11 @@ int net_start( void )
 
 	if( !en )
 	{
-		err( "No networking enabled." );
+		err( 0x0b01, "No networking enabled." );
 		return -1;
 	}
 
-	notice( "Starting networking." );
+	notice( 0x0b02, "Starting networking." );
 	ret += net_start_type( ctl->net->line );
 	ret += net_start_type( ctl->net->bin );
 
@@ -589,7 +603,7 @@ void net_stop_type( NET_TYPE_CTL *ntc )
 
 void net_stop( void )
 {
-	notice( "Stopping networking." );
+	notice( 0x0c01, "Stopping networking." );
 	net_stop_type( ctl->net->line );
 	net_stop_type( ctl->net->bin );
 }
@@ -644,7 +658,7 @@ int net_config_line( AVP *av )
 		if( attIs( "timeout" ) )
 		{
 			ctl->net->dead_time = strtod( av->val, NULL );
-			ndebug( "Dead connection timeout set to %.2f sec.", ctl->net->dead_time );
+			ndebug( 0x0d01, "Dead connection timeout set to %.2f sec.", ctl->net->dead_time );
 			return 0;
 		}
 
@@ -697,4 +711,5 @@ int net_config_line( AVP *av )
 	return 0;
 }
 
+#undef LLFID
 

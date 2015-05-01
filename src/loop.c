@@ -1,9 +1,10 @@
 #include "coal.h"
 
+#define LLFID LLFLO
 
 void loop_end( char *reason )
 {
-  	info( "Shutting down polling: %s", reason );
+	info( 0x0101, "Shutting down polling: %s", reason );
 	ctl->run_flags |= RUN_SHUTDOWN;
 	ctl->run_flags &= ~RUN_LOOP;
 }
@@ -11,7 +12,7 @@ void loop_end( char *reason )
 
 void loop_kill( int sig )
 {
-	notice( "Received signal %d", sig );
+	notice( 0x0201, "Received signal %d", sig );
 	ctl->run_flags |= RUN_SHUTDOWN;
 	ctl->run_flags &= ~RUN_LOOP;
 }
@@ -20,7 +21,7 @@ void loop_mark_start( void )
 {
 	pthread_mutex_lock( &(ctl->locks->loop) );
 	ctl->loop_count++;
-	debug( "Some loop thread has started." );
+	debug( 0x0301, "Some loop thread has started." );
 	pthread_mutex_unlock( &(ctl->locks->loop) );
 }
 
@@ -28,7 +29,7 @@ void loop_mark_done( void )
 {
 	pthread_mutex_lock( &(ctl->locks->loop) );
 	ctl->loop_count--;
-	debug( "Some loop thread has finished." );
+	debug( 0x0401, "Some loop thread has finished." );
 	pthread_mutex_unlock( &(ctl->locks->loop) );
 }
 
@@ -69,4 +70,6 @@ void loop_run( void )
 
 	loop_mark_done( );
 }
+
+#undef LLFID
 

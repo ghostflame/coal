@@ -1,25 +1,26 @@
 #include "coal.h"
 
+#define LLFID LLFJS
 
 
-
-int json_send_children( NSOCK *s, QUERY *q )
+int out_json_tree( NSOCK *s, QUERY *q )
 {
 	char *to;
 	int i;
 	NODE *n;
 
-	for( i = 0, n = q->node->children; n; n = n->next, i++ );
 
 	to  = (char *) s->out.buf;
 	to += snprintf( to, 1044,
 		"{\"path\":\"%s\",\"type\":\"%s\",\"count\":%d,\"nodes\":[",
 		q->path->str,
 		node_leaf_str( q->node ),
-		i );
+		q->rcount );
 
-	for( i = 0, n = q->node->children; n; n = n->next, i++ )
+	for( i = 0; i < q->rcount; i++ )
 	{
+		n = q->nodes[i];
+
 		to += snprintf( to, 1024, "%s[%s,%s]",
 			( i ) ? "," : "",
 			( n->flags & NODE_FLAG_LEAF ) ? "leaf" : "branch",
@@ -43,26 +44,23 @@ int json_send_children( NSOCK *s, QUERY *q )
 
 
 
-int json_send_result( NSOCK *s, QUERY *q )
+int out_json_data( NSOCK *s, QUERY *q )
 {
 	uint32_t t;
 	int start;
 	char *to;
 	C3PNT *p;
 
-	if( q->tree )
-		return json_send_children( s, q );
-
 	to  = (char *) s->out.buf;
 	to += snprintf( to, 1096,
 		"{\"path\":\"%s\",\"start\":%ld,\"end\":%ld,\"count\":%d,\"period\":%d,\"metric\":\"%s\",\"values\":[",
-		q->path->str, q->start, q->end, q->res.count, q->res.period,
+		q->path->str, q->start, q->end, q->results->count, q->results->period,
 		c3db_metric_name( q->rtype ) );
 
-	p = q->res.points;
-	t = q->start - ( q->start % q->res.period );
+	p = q->results->points;
+	t = q->start - ( q->start % q->results->period );
 
-	for( ; t < q->end; t += q->res.period, p++ )
+	for( ; t < q->end; t += q->results->period, p++ )
 	{
 		if( p->ts == t )
 			to += snprintf( to, 64, "%s[%u,%6f]",
@@ -88,4 +86,13 @@ int json_send_result( NSOCK *s, QUERY *q )
 
 	return 0;
 }
+
+
+int out_json_search( NSOCK *s, QUERY *q )
+{
+	return 0;
+}
+
+
+#undef LLFID
 

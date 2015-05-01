@@ -1,5 +1,7 @@
 #include "coal.h"
 
+#define LLFID LLFTH
+
 pthread_attr_t *tt_attr = NULL;
 
 void thread_throw_init_attr( void )
@@ -8,7 +10,7 @@ void thread_throw_init_attr( void )
 	pthread_attr_init( tt_attr );
 
 	if( pthread_attr_setdetachstate( tt_attr, PTHREAD_CREATE_DETACHED ) )
-		err( "Cannot set default attr state to detached -- %s", Err );
+		err( 0x0101, "Cannot set default attr state to detached -- %s", Err );
 }
 
 
@@ -109,4 +111,5 @@ void lock_shutdown( void )
 	l->init_done = 0;
 }
 
+#undef LLFID
 

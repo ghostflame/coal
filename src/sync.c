@@ -1,5 +1,6 @@
 #include "coal.h"
 
+#define LLFID LLFSY
 
 void sync_single_node( NODE *n )
 {
@@ -87,12 +88,12 @@ void *sync_all_nodes( void *arg )
 	unsigned long sid = ctl->sync->sync_id;
 	THRD *t = (THRD *) arg;
 
-	debug( "Starting synchronization thread (%02d) %08lu/%lu.",
+	debug( 0x0101, "Starting synchronization thread (%02d) %08lu/%lu.",
 		ctl->sync->curr_threads, sid, (unsigned long) t->id );
 
 	sync_nodes( ctl->node->nodes );
 
-	debug( "Finished synchronization thread (%02d) %08lu/%lu.",
+	debug( 0x0102, "Finished synchronization thread (%02d) %08lu/%lu.",
 		ctl->sync->curr_threads, sid, (unsigned long) t->id );
 
 	// keep track of threads
@@ -188,3 +189,6 @@ SYNC_CTL *sync_config_defaults( void )
 
 	return sc;
 }
+
+#undef LLFID
+

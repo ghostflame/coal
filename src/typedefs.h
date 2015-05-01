@@ -15,6 +15,7 @@ typedef struct lock_control			LOCK_CTL;
 typedef struct sync_control			SYNC_CTL;
 typedef struct stat_control			STAT_CTL;
 typedef struct relay_control		REL_CTL;
+typedef struct query_control		QRY_CTL;
 
 // other structures
 typedef struct config_context 		CCTXT;
@@ -26,6 +27,7 @@ typedef struct net_socket			NSOCK;
 typedef struct host_data			HOST;
 typedef struct node_routing			NODE_ROUTE;
 typedef struct node_data			NODE;
+typedef struct node_list			NLIST;
 typedef struct path_cache			PCACHE;
 typedef struct path_data			PATH;
 typedef struct thread_data			THRD;
@@ -45,6 +47,8 @@ typedef struct stats_data			STATS;
 // and function types
 typedef void * throw_fn ( void * );
 typedef void relay_fn ( NSOCK *, POINT * );
-
+typedef POINT * data_read_fn ( HOST * );
+typedef QUERY * query_read_fn ( HOST * );
+typedef int qoutput_fn ( NSOCK *, QUERY *q );
 
 #endif

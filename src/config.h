@@ -23,6 +23,7 @@ struct coal_control
 	SYNC_CTL		*	sync;
 	STAT_CTL		*	stats;
 	REL_CTL			*	relay;
+	QRY_CTL			*	query;
 
 	// where as-yet-unclassified data goes
 	POINT			*	data_in;

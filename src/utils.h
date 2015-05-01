@@ -63,12 +63,17 @@ void get_time( void );
 char *perm_str( int len );
 char *str_dup( char *src, int len );
 
+// this can be freed
+char *str_copy( char *src, int len );
+
+// get string length, up to a maximum
+int str_nlen( char *src, int max );
+
 // processing a config line in variable/value
 int var_val( char *line, int len, AVP *av, int flags );
 
 // break up a string by delimiter
 int strwords( WORDS *w, char *src, int len, char sep );
-
 
 void pidfile_write( void );
 void pidfile_remove( void );

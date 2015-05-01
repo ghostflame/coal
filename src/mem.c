@@ -1,6 +1,6 @@
 #include "coal.h"
 
-
+#define LLFID LLFME
 
 HOST *mem_new_host( void )
 {
@@ -350,6 +350,8 @@ QUERY *mem_new_query( void )
 void mem_free_query( QUERY **q )
 {
 	QUERY *sq;
+	C3RES *rs;
+	int i;
 
 	if( !q || !*q )
 		return;
@@ -357,8 +359,18 @@ void mem_free_query( QUERY **q )
 	sq = *q;
 	*q = NULL;
 
-	if( sq->res.count && sq->res.points )
-		free( sq->res.points );
+	if( sq->results )
+	{
+		for( rs = sq->results, i = 0; i < sq->rcount; i++, rs++ )
+		{
+			if( rs->points )
+				free( rs->points );
+			free( rs );
+		}
+	}
+
+	if( sq->nodes )
+		free( sq->nodes );
 
 	if( sq->path )
 		mem_free_path( &(sq->path) );
@@ -384,4 +396,6 @@ MEM_CTL *mem_config_defaults( void )
 	return (MEM_CTL *) allocz( sizeof( MEM_CTL ) );
 }
 
+
+#undef LLFID
 

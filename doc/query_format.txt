@@ -1,15 +1,13 @@
 Query Format
 ============
 
-Queries can have up to 5 fields
-
-Order  Field       Type        Default
-1      Path        String      None - required
-2      Start       Timestamp   None - presence denotes a data query, absence a tree query
-3      End         Timestamp   Current time
-4      Metric      String      mean - taken from [ mean, min, max, count, sum, spread ]
-5      Format      String      fields - taken from [ fields, json ]
-
+Order Field     Type       Default
+1     Type      String     data, taken from [ data, search, tree ]
+2     Format    String     fields - taken from [ fields, json ]
+3     Path      String     None - required
+4     Start     Timestamp  Now-24hrs.  Only valid in a 'data'
+5     End       Timestamp  Current Time.  Only valid in a 'data' type
+6     Metric    String     mean - taken from [ mean, min, max, count, sum, spread ]
 
 
 In line format, these are presented separated by a space ' ' and terminated
@@ -29,6 +27,7 @@ Return Formats
 
 Line format:
 
+
 The return of a data query is:
 
 <path> <from> <to> <metric> <period> <type> <result count>\n
@@ -36,6 +35,13 @@ The return of a data query is:
 [<timestamp>,<value>|"null"]\n
 ...
 
+Until all results are sent.
+
+The return of a search query is:
+<string> 0 0 "search" 0 1 <result count>\n
+<path>\n
+<path>\n
+...
 Until all results are sent.
 
 The return of a tree query is:
@@ -67,6 +73,18 @@ The return of a data query is:
 		[<timestamp>,<value>|"null"],
 		...
 	]
+}
+
+
+The return of a search query is:
+{
+    "regex":    <string>,
+    "type":     "leaf",
+    "count":    <result count>,
+    "paths":    p
+        <path>,
+        <path>,
+    ]
 }
 
 

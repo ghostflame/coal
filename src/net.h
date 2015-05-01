@@ -102,6 +102,9 @@ struct host_data
 
 	WORDS				*	all;	// each line
 	WORDS				*	val;	// per line
+
+	query_read_fn		*	qrf;
+	data_read_fn		*	drf;
 };
 
 // thread control

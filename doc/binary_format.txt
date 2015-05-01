@@ -27,6 +27,8 @@ Type	Meaning
 0x09	Query answer - response containing records
 0x10	Tree Query - request for path structure
 0x11	Tree answer - response containing nodes
+0x12	Search Query - request for matching nodes
+0x13	Search Answer - response containing nodes
 
 
 
@@ -50,14 +52,14 @@ Binary Data Format
 
 Input:
 
-Offset   Size     Field
-0        1        Version
-1        1        Type
-2        2        Record size (ie, size - 4 more bytes to read)
-4        4        (time_t) timestamp
-8        4        (float) value
-12		 var      Path (length = record size - 12, capped at 1024)
-var      0-3      Padding for 4-byte alignment
+Offset	Size	Field
+0		1		Version
+1		1		Type
+2		2		Record size (ie, size - 4 more bytes to read)
+4		4		(time_t) timestamp
+8		4		(float) value
+12		var		Path (length = record size - 12, capped at 1024)
+var		0-3		Padding for 4-byte alignment
 
 Output:
 
@@ -73,11 +75,15 @@ Input:
 Offset   Size     Field
 0        1        Version
 1        1        Type
-2        2        Record size (ie, size - 4 more bytes to read)
-4        4        Start time (ignored in tree queries)
-8        4        End time (ignored in tree queries)
-12       1        Metric (ignored in tree queries)
-13       var      Path (length = record size - 13, capped at 1024)
+2        1        Query type
+3        1        Query id
+4        4        Record size (ie, size - 4 more bytes to read)
+8        4        Start time (ignored in search/tree queries)
+12       4        End time (ignored in search/tree queries)
+16       1        Metric (ignored for tree queries)
+17       1        Padding
+18       2        Path length
+20       var      Path (size capped at 1024)
 var      0-3      Padding for 4-byte alignment
 
 
@@ -86,13 +92,14 @@ Output (tree query):
 Offset   Size     Field
 0        1        Version
 1        1        Type
-2        2        Padding (record size not confined to 64k)
-4        4        Record size
+2        1        Query type
+3        1        Query id
+4        4        Record size (ie size - 8 more bytes to read)
 8        1        Requested node type (1 = leaf, 0 = branch)
 9        1        Padding
 10       2        Result count (which we'll call N)
 <i = 1 to N times>
-12+4i    1        Node type (1 = leaf, 2 = branch)
+12+4i    1        Node type (1 = leaf, 0 = branch)
 13+4i    1        Padding
 14+4i    2        Path length (capped at 1024)
 ...
@@ -119,21 +126,42 @@ Output (data query):
 Offset   Size     Field
 0        1        Version
 1        1        Type
-2        2        Padding (record size not confined to 64k)
-4        4        Record size
+2        1        Query type
+3        1        Query id
+4        4        Record size (ie size - 8 more bytes to read)
 8        4        Start time of data (might not match query)
 12       4        End time of data (might not match query)
 16       1        Metric
 17       1        Padding
 18       2        Path length
 20       4        Result count (which we'll call N)
-<i = 1 to N times>
+<i = 0 to N-1>
 24+12i   4        (time_t) timestamp
 28+12i   4        Flags ( 0x1 : valid )
 32+12i   4        (float) value
 ...
 24+12N   var      Path
 var      0-3      Padding for 4-byte alignment
+
+
+
+Output (search query):
+
+Offset   Size     Field
+0        1        Version
+1        1        Type
+2        1        Query type
+3        1        Query id
+4        4        Record size (ie size - 8 more bytes to read)
+8        4        Match count (which we'll call N)
+<i = 0 to N-1>
+12+2i    2        Path length
+...
+<i = 0 to N-1>
+12+2N    var      Matching path + \0
+...
+var      0-3      Padding for 4-byte alignment
+
 
 
 

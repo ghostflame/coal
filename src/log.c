@@ -1,5 +1,7 @@
 #include "coal.h"
 
+#define LLFID LLFLO
+
 char *log_level_strings[LOG_LEVEL_MAX] =
 {
 	"FATAL",
@@ -17,7 +19,7 @@ int log_get_level( char *str )
 
 	if( !str || !*str )
 	{
-	  	warn( "Empty/null log level string." );
+	  	warn( 0x0101, "Empty/null log level string." );
 		// clearly, you need the help
 		return LOG_LEVEL_DEBUG;
 	}
@@ -28,7 +30,7 @@ int log_get_level( char *str )
 		if( i >= 0 && i < LOG_LEVEL_MAX )
 		  	return i;
 
-		warn( "Invalid log level string '%s'", str );
+		warn( 0x0102, "Invalid log level string '%s'", str );
 		return LOG_LEVEL_DEBUG;
 	}
 
@@ -37,7 +39,7 @@ int log_get_level( char *str )
 		  	return i;
 
 
-	warn( "Unrecognised log level string '%s'", str );
+	warn( 0x0103, "Unrecognised log level string '%s'", str );
 	return LOG_LEVEL_DEBUG;
 }
 
@@ -71,7 +73,7 @@ int log_write_ts( char *to, int len )
 
 
 int log_line( int dest, int level, const char *file, const int line,
-				const char *fn, char *fmt, ... )
+				const char *fn, unsigned int id, char *fmt, ... )
 {
 	int fd = 2, l = 0, tofile = 0;
   	char buf[LOG_LINE_MAX];
@@ -113,8 +115,8 @@ int log_line( int dest, int level, const char *file, const int line,
 	// write the predictable parts
 	l  = log_write_ts( buf, LOG_LINE_MAX );
 
-	l += snprintf( buf + l, LOG_LINE_MAX - l, " [%s] ",
-			log_level_strings[level] );
+	l += snprintf( buf + l, LOG_LINE_MAX - l, " [%08x] [%s] ",
+			id, log_level_strings[level] );
 
 
 	// fatals, errs and debugs get details
@@ -213,7 +215,7 @@ void log_reopen( int sig )
 	}
 
 	if( ret )
-		warn( "Failed to reopen at least one of our logs." );
+		warn( 0x0201, "Failed to reopen at least one of our logs." );
 }
 
 
@@ -226,16 +228,16 @@ int log_start( void )
 		return -1;
 
 	ret += __log_open( &(ctl->log->main) );
-	notice( "Coal logging started." );
+	notice( 0x0301, "Coal logging started." );
 
 	ret += __log_open( &(ctl->log->query) );
-	qnotice( "Coal query logging started." );
+	qnotice( 0x0302, "Coal query logging started." );
 
 	ret += __log_open( &(ctl->log->node) );
-	nnotice( "Coal node logging started." );
+	nnotice( 0x0303, "Coal node logging started." );
 
 	ret += __log_open( &(ctl->log->relay) );
-	rnotice( "Coal relay logging started." );
+	rnotice( 0x0304, "Coal relay logging started." );
 
 	return ret;
 }
@@ -322,7 +324,7 @@ int log_config_line( AVP *av )
 	{
 		if( llen != 1 )
 		{
-			warn( "Cannot set filename of all log types." );
+			warn( 0x0401, "Cannot set filename of all log types." );
 			return -1;
 		}
 		free( list[0]->filename );
@@ -351,4 +353,5 @@ int log_config_line( AVP *av )
 	return 0;
 }
 
+#undef LLFID
 

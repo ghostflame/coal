@@ -52,7 +52,7 @@ struct log_control
 
 
 // functions from log.c that we want to expose
-int log_line( int dest, int level, const char *file, const int line, const char *fn, char *fmt, ... );
+int log_line( int dest, int level, const char *file, const int line, const char *fn, unsigned int id, char *fmt, ... );
 int log_close( void );
 void log_reopen( int sig );
 int log_start( void );
@@ -61,36 +61,71 @@ int log_start( void );
 LOG_CTL *log_config_defaults( void );
 int log_config_line( AVP *av );
 
+// per-logfile identifiers
+// NEVER EVER EDIT THESE
+// only append new ones
+#define LLMID		0x10000000
+#define LLQID		0x20000000
+#define LLNID		0x30000000
+#define LLRID		0x40000000
 
-#define LLFLF( d, l, f, ... )	log_line( LOG_DEST_##d, LOG_LEVEL_##l, __FILE__, __LINE__, __FUNCTION__, f, ## __VA_ARGS__ )
-#define LLNZN( d, l, f, ... )	log_line( LOG_DEST_##d, LOG_LEVEL_##l,     NULL,        0,         NULL, f, ## __VA_ARGS__ )
 
-#define fatal( fmt, ... )		LLFLF( MAIN,  FATAL,  fmt, ## __VA_ARGS__ )
-#define err( fmt, ... )			LLNZN( MAIN,  ERR,    fmt, ## __VA_ARGS__ )
-#define warn( fmt, ... )		LLNZN( MAIN,  WARN,   fmt, ## __VA_ARGS__ )
-#define notice( fmt, ... )		LLNZN( MAIN,  NOTICE, fmt, ## __VA_ARGS__ )
-#define info( fmt, ... )		LLNZN( MAIN,  INFO,   fmt, ## __VA_ARGS__ )
-#define debug( fmt, ... )		LLFLF( MAIN,  DEBUG,  fmt, ## __VA_ARGS__ )
+// LLFID exists in each .c file, defined at the start and undef'd at the end
 
-#define qfatal( fmt, ... )		LLFLF( MAIN,  FATAL,  fmt, ## __VA_ARGS__ )
-#define qerr( fmt, ... )		LLNZN( QUERY, ERR,    fmt, ## __VA_ARGS__ )
-#define qwarn( fmt, ... )		LLNZN( QUERY, WARN,   fmt, ## __VA_ARGS__ )
-#define qnotice( fmt, ... )		LLNZN( QUERY, NOTICE, fmt, ## __VA_ARGS__ )
-#define qinfo( fmt, ... )		LLNZN( QUERY, INFO,   fmt, ## __VA_ARGS__ )
-#define qdebug( fmt, ... )		LLFLF( QUERY, DEBUG,  fmt, ## __VA_ARGS__ )
+#define LLFLF( d, l, i, f, ... )	log_line( LOG_DEST_##d, LOG_LEVEL_##l, __FILE__, __LINE__, __FUNCTION__, (LLFID|i), f, ## __VA_ARGS__ )
+#define LLNZN( d, l, i, f, ... )	log_line( LOG_DEST_##d, LOG_LEVEL_##l,     NULL,        0,         NULL, (LLFID|i), f, ## __VA_ARGS__ )
 
-#define nfatal( fmt, ... )		LLFLF( MAIN,  FATAL,  fmt, ## __VA_ARGS__ )
-#define nerr( fmt, ... )		LLNZN( NODE,  ERR,    fmt, ## __VA_ARGS__ )
-#define nwarn( fmt, ... )		LLNZN( NODE,  WARN,   fmt, ## __VA_ARGS__ )
-#define nnotice( fmt, ... )		LLNZN( NODE,  NOTICE, fmt, ## __VA_ARGS__ )
-#define ninfo( fmt, ... )		LLNZN( NODE,  INFO,   fmt, ## __VA_ARGS__ )
-#define ndebug( fmt, ... )		LLFLF( NODE,  DEBUG,  fmt, ## __VA_ARGS__ )
+#define fatal( i, fmt, ... )		LLFLF( MAIN,  FATAL,  (LLMID|i), fmt, ## __VA_ARGS__ )
+#define err( i, fmt, ... )			LLNZN( MAIN,  ERR,    (LLMID|i), fmt, ## __VA_ARGS__ )
+#define warn( i, fmt, ... )			LLNZN( MAIN,  WARN,   (LLMID|i), fmt, ## __VA_ARGS__ )
+#define notice( i, fmt, ... )		LLNZN( MAIN,  NOTICE, (LLMID|i), fmt, ## __VA_ARGS__ )
+#define info( i, fmt, ... )			LLNZN( MAIN,  INFO,   (LLMID|i), fmt, ## __VA_ARGS__ )
+#define debug( i, fmt, ... )		LLFLF( MAIN,  DEBUG,  (LLMID|i), fmt, ## __VA_ARGS__ )
 
-#define rfatal( fmt, ... )		LLFLF( MAIN,  FATAL,  fmt, ## __VA_ARGS__ )
-#define rerr( fmt, ... )		LLNZN( RELAY, ERR,    fmt, ## __VA_ARGS__ )
-#define rwarn( fmt, ... )		LLNZN( RELAY, WARN,   fmt, ## __VA_ARGS__ )
-#define rnotice( fmt, ... )		LLNZN( RELAY, NOTICE, fmt, ## __VA_ARGS__ )
-#define rinfo( fmt, ... )		LLNZN( RELAY, INFO,   fmt, ## __VA_ARGS__ )
-#define rdebug( fmt, ... )		LLFLF( RELAY, DEBUG,  fmt, ## __VA_ARGS__ )
+#define qfatal( i, fmt, ... )		LLFLF( MAIN,  FATAL,  (LLQID|i), fmt, ## __VA_ARGS__ )
+#define qerr( i, fmt, ... )			LLNZN( QUERY, ERR,    (LLQID|i), fmt, ## __VA_ARGS__ )
+#define qwarn( i, fmt, ... )		LLNZN( QUERY, WARN,   (LLQID|i), fmt, ## __VA_ARGS__ )
+#define qnotice( i, fmt, ... )		LLNZN( QUERY, NOTICE, (LLQID|i), fmt, ## __VA_ARGS__ )
+#define qinfo( i, fmt, ... )		LLNZN( QUERY, INFO,   (LLQID|i), fmt, ## __VA_ARGS__ )
+#define qdebug( i, fmt, ... )		LLFLF( QUERY, DEBUG,  (LLQID|i), fmt, ## __VA_ARGS__ )
+
+#define nfatal( i, fmt, ... )		LLFLF( MAIN,  FATAL,  (LLNID|i), fmt, ## __VA_ARGS__ )
+#define nerr( i, fmt, ... )			LLNZN( NODE,  ERR,    (LLNID|i), fmt, ## __VA_ARGS__ )
+#define nwarn( i, fmt, ... )		LLNZN( NODE,  WARN,   (LLNID|i), fmt, ## __VA_ARGS__ )
+#define nnotice( i, fmt, ... )		LLNZN( NODE,  NOTICE, (LLNID|i), fmt, ## __VA_ARGS__ )
+#define ninfo( i, fmt, ... )		LLNZN( NODE,  INFO,   (LLNID|i), fmt, ## __VA_ARGS__ )
+#define ndebug( i, fmt, ... )		LLFLF( NODE,  DEBUG,  (LLNID|i), fmt, ## __VA_ARGS__ )
+
+#define rfatal( i, fmt, ... )		LLFLF( MAIN,  FATAL,  (LLRID|i), fmt, ## __VA_ARGS__ )
+#define rerr( i, fmt, ... )			LLNZN( RELAY, ERR,    (LLRID|i), fmt, ## __VA_ARGS__ )
+#define rwarn( i, fmt, ... )		LLNZN( RELAY, WARN,   (LLRID|i), fmt, ## __VA_ARGS__ )
+#define rnotice( i, fmt, ... )		LLNZN( RELAY, NOTICE, (LLRID|i), fmt, ## __VA_ARGS__ )
+#define rinfo( i, fmt, ... )		LLNZN( RELAY, INFO,   (LLRID|i), fmt, ## __VA_ARGS__ )
+#define rdebug( i, fmt, ... )		LLFLF( RELAY, DEBUG,  (LLRID|i), fmt, ## __VA_ARGS__ )
+
+
+// file-based LOG strs
+// NEVER EVER EDIT THESE
+// only append
+#define LLFCF	0x00100000
+#define LLFDA	0x00200000
+#define LLFLG	0x00300000
+#define LLFLO	0x00400000
+#define LLFMA	0x00500000
+#define LLFME	0x00600000
+#define LLFNE	0x00700000
+#define LLFNO	0x00800000
+#define LLFQU	0x00900000
+#define LLFRE	0x00a00000
+#define LLFST	0x00b00000
+#define LLFSY	0x00c00000
+#define LLFTH	0x00d00000
+#define LLFUT	0x00e00000
+#define LLFSE	0x00f00000
+#define LLSOB	0x01000000
+#define LLSOJ	0x01100000
+#define LLSOL	0x01200000
+
+
 
 #endif

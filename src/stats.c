@@ -1,5 +1,6 @@
 #include "coal.h"
 
+#define LLFID LLFST
 
 void stats_run( void )
 {
@@ -58,4 +59,6 @@ STAT_CTL *stats_config_defaults( void )
 
 	return s;
 }
+
+#undef LLFID
 

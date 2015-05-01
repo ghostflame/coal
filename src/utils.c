@@ -1,5 +1,6 @@
 #include "coal.h"
 
+#define LLFID LLFUT
 
 double timedbl( double *dp )
 {
@@ -78,6 +79,30 @@ char *str_dup( char *src, int len )
 	return p;
 }
 
+char *str_copy( char *src, int len )
+{
+	char *p;
+
+	if( !len )
+		len = strlen( src );
+
+	p = (char *) allocz( len + 1 );
+	memcpy( p, src, len );
+
+	return p;
+}
+
+// a capped version of strlen
+int str_nlen( char *src, int max )
+{
+	char *p;
+
+	if( ( p = memchr( src, '\0', max ) ) )
+		return p - src;
+
+	return max;
+}
+
 
 int strwords( WORDS *w, char *src, int len, char sep )
 {
@@ -135,6 +160,8 @@ int strwords( WORDS *w, char *src, int len, char sep )
 	// done
 	return ( w->wc = i );
 }
+
+
 
 
 #define	VV_NO_CHECKS	0x07
@@ -275,7 +302,7 @@ void pidfile_write( void )
 
 	if( !( fh = fopen( ctl->pidfile, "w" ) ) )
 	{	
-		warn( "Unable to write to pidfile %s -- %s",
+		warn( 0x0101, "Unable to write to pidfile %s -- %s",
 			ctl->pidfile, Err );
 		return;
 	}
@@ -286,6 +313,8 @@ void pidfile_write( void )
 void pidfile_remove( void )
 {
 	if( unlink( ctl->pidfile ) && errno != ENOENT )
-		warn( "Unable to remove pidfile %s -- %s",
+		warn( 0x0201, "Unable to remove pidfile %s -- %s",
 			ctl->pidfile, Err );
 }
+
+#undef LLFID

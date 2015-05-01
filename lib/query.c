@@ -1,5 +1,11 @@
 #include "local.h"
 
+const char *__libcoal_query_type_names[QUERY_TYPE_MAX] = {
+	"data",
+	"search",
+	"tree"
+};
+
 
 int __libcoal_parse_data_query( COALH *h, COALCONN *c, COALQRY *q )
 {
@@ -79,7 +85,7 @@ int __libcoal_parse_tree_query( COALH *h, COALCONN *c, COALQRY *q )
 
 int __libcoal_read_query( COALH *h, COALCONN *c, int wait )
 {
-	uint8_t type, at, qt;
+	uint8_t type;
 	uint32_t sz;
 	int ret;
 
@@ -95,24 +101,6 @@ int __libcoal_read_query( COALH *h, COALCONN *c, int wait )
 		{
 			type = *((uint8_t *)  (c->inbuf + 1));
 			sz   = *((uint32_t *) (c->inbuf + 4));
-
-			if( c->qry->tq )
-			{
-			  	qt = BINF_TYPE_TREE;
-				at = BINF_TYPE_TREE_RET;
-			}
-			else
-			{
-				qt = BINF_TYPE_QUERY;
-				at = BINF_TYPE_QUERY_RET;
-			}
-
-			// did we get the right kind of answer?
-			if( type != at )
-			{
-				herr( BAD_QANS, "Wrong query answer type (%hhu/%hhu)", qt, type );
-				return -1;
-			}
 
 			// add the alignment padding to the end
 			sz += ( 4 - ( sz % 4 ) ) % 4;
@@ -133,8 +121,8 @@ int __libcoal_read_query( COALH *h, COALCONN *c, int wait )
 		usleep( COAL_QUERY_SLEEP_USEC );
 	}
 
-	return ( c->qry->tq ) ? __libcoal_parse_tree_query( h, c, c->qry ) :
-	                        __libcoal_parse_data_query( h, c, c->qry );
+	return ( 1 ) ? __libcoal_parse_tree_query( h, c, c->qry ) :
+	               __libcoal_parse_data_query( h, c, c->qry );
 }
 
 
@@ -178,7 +166,7 @@ int libcoal_query( COALH *h, COALQRY *q, int wait )
 
 	uc    = c->wrptr;
 	*uc++ = 0x01;
-	*uc++ = ( q->tq ) ? BINF_TYPE_QUERY : BINF_TYPE_TREE;
+	//*uc++ = ( q->tq ) ? BINF_TYPE_QUERY : BINF_TYPE_TREE;
 	us    = (uint16_t *) uc;
 	*us++ = (uint16_t) ( q->len + 13 );
 	tp    = (time_t *) us;
@@ -272,7 +260,6 @@ void __libcoal_query_clean( COALQRY *q )
 		q->data = (COALDANS *) allocz( sizeof( COALDANS ) );
 	}
 
-	q->tq     = 0;
 	q->start  = 0;
 	q->end    = 0;
 	q->metric = 0;
@@ -309,8 +296,6 @@ int libcoal_prepare_tree_query( COALH *h, COALQRY **qp, char *path, int len )
 	q->len   = ( len ) ? len : strlen( path );
 	q->path  = (char *) allocz( q->len + 1 );
 	memcpy( q->path, path, q->len );
-
-	q->tq    = 1;
 	q->state = COAL_QUERY_PREPD;
 
 	return 0;
