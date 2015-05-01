@@ -24,6 +24,7 @@ struct coal_control
 	STAT_CTL		*	stats;
 	REL_CTL			*	relay;
 	QRY_CTL			*	query;
+	PRIV_CTL		*	priv;
 
 	// where as-yet-unclassified data goes
 	POINT			*	data_in;
@@ -38,8 +39,8 @@ struct coal_control
 	double				curr_time;
 	int					main_tick_usec;
 
+	// paths
 	char			*	pidfile;
-	char			*	basedir;
 	char			*	cfg_file;
 };
 

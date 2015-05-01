@@ -122,10 +122,10 @@ int log_config_line( AVP *av );
 #define LLFTH	0x00d00000
 #define LLFUT	0x00e00000
 #define LLFSE	0x00f00000
-#define LLSOB	0x01000000
-#define LLSOJ	0x01100000
-#define LLSOL	0x01200000
-
+#define LLFOB	0x01000000
+#define LLFOJ	0x01100000
+#define LLFOL	0x01200000
+#define LLFPR	0x01300000
 
 
 #endif

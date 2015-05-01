@@ -103,6 +103,42 @@ int str_nlen( char *src, int max )
 	return max;
 }
 
+// make a directory, plus parents if necessary
+int mkdir_recursive( char *path, mode_t mode )
+{
+	char *sp, copy[1024];
+
+	// duff args?
+	if( !path || !*path )
+		return 0;
+
+	// look for the parent, make that if need be
+	if( ( sp = strrchr( path, '/' ) ) )
+	{
+		// with a few safety checks
+		if( ( sp - path ) > 1023 )
+		{
+			errno = ENAMETOOLONG;
+			return -1;
+		}
+
+		// make a copy short one slash
+		memcpy( copy, path, sp - path );
+		copy[sp - path] = '\0';
+
+		// try to make that
+		if( mkdir_recursive( copy, mode ) )
+			return -1;
+	}
+
+	// and call mkdir
+	if( mkdir( path, mode )
+	 && errno != EEXIST )
+		return -1;
+
+	return 0;
+}
+
 
 int strwords( WORDS *w, char *src, int len, char sep )
 {
@@ -294,6 +330,7 @@ vv_finish:
 	av->status = VV_LINE_ATTVAL;
 	return 0;
 }
+
 
 
 void pidfile_write( void )

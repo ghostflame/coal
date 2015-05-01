@@ -145,11 +145,7 @@ int config_line( AVP *av )
 		free( ctl->pidfile );
 		ctl->pidfile = config_relative_path( av->val );
 	}
-	else if( attIs( "basedir" ) )
-	{
-		free( ctl->basedir );
-		ctl->basedir = strdup( av->val );
-	}
+
 	return 0;
 }
 
@@ -163,15 +159,15 @@ char *config_relative_path( char *inpath )
 	if( *inpath != '~' )
 		return strdup( inpath );
 
-	if( !ctl->basedir )
+	if( !ctl->priv->basedir )
 	  	// just step over it
 		return strdup( inpath + 1 );
 
 	// add 1 for the /, remove 1 for the ~, add 1 for the \0
-	len = strlen( ctl->basedir ) + strlen( inpath ) + 1;
+	len = strlen( ctl->priv->basedir ) + strlen( inpath ) + 1;
 
 	ret = (char *) malloc( len );
-	snprintf( ret, len, "%s/%s", ctl->basedir, inpath + 1 );
+	snprintf( ret, len, "%s/%s", ctl->priv->basedir, inpath + 1 );
 
 	return ret;
 }
@@ -243,6 +239,8 @@ int get_config( char *inpath )
 		  	lrv = net_config_line( &av );
 		else if( secIs( "node" ) )
 			lrv = node_config_line( &av );
+		else if( secIs( "priv" ) )
+			lrv = priv_config_line( &av );
 		else if( secIs( "query" ) )
 			lrv = query_config_line( &av );
 		else if( secIs( "routing" ) )
@@ -336,9 +334,9 @@ COAL_CTL *create_config( void )
 	c->stats       = stats_config_defaults( );
 	c->relay       = relay_config_defaults( );
 	c->query       = query_config_defaults( );
+	c->priv        = priv_config_defaults( );
 
 	c->pidfile     = strdup( DEFAULT_PID_FILE );
-	c->basedir     = strdup( DEFAULT_BASE_DIR );
 	c->cfg_file    = strdup( DEFAULT_CONFIG_FILE );
 
 	return c;

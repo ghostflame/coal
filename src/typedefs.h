@@ -16,6 +16,8 @@ typedef struct sync_control			SYNC_CTL;
 typedef struct stat_control			STAT_CTL;
 typedef struct relay_control		REL_CTL;
 typedef struct query_control		QRY_CTL;
+typedef struct priv_control			PRIV_CTL;
+
 
 // other structures
 typedef struct config_context 		CCTXT;
@@ -36,6 +38,7 @@ typedef struct av_pair				AVP;
 typedef struct relay_destination	RDEST;
 typedef struct relay_data_conn		RDCONN;
 typedef struct relay_query_conn		RQCONN;
+
 
 // stats structures
 typedef struct data_stats_data		DSTATS;

@@ -57,6 +57,7 @@ void shut_down( int exval )
 }
 
 
+
 int set_signals( void )
 {
 	struct sigaction sa;
@@ -125,20 +126,24 @@ int main( int ac, char **av )
 				break;
 		}
 
-
 	if( get_config( ctl->cfg_file ) )
 		fatal( 0x0101, "Unable to read config file '%s'\n", ctl->cfg_file );
 
-	// can we chdir to our base dir?
-	if( chdir( ctl->basedir ) )
-		fatal( 0x0102, "Unable to chdir to base dir '%s' -- %s",
-			ctl->basedir, Err );
-	else
-		debug( 0x0103, "Working directory switched to %s", ctl->basedir );
+	if( priv_get_user( ) )
+		fatal( 0x0102, "Unable to determine user privileges." );
+
+	// we will have a basedir to chdir to
+	if( priv_set_dirs( ) )
+		fatal( 0x0103, "Unable to set directory options.\n" );
+
+	// are we dropping privileges?
+	// has to happen *after* the chroot
+	if( priv_set_user( ) )
+		fatal( 0x0104, "Unable to change privileges." );
 
 	// match up relay rules against destinations
 	if( config_check_relay( ) )
-		fatal( 0x0104, "Unable to validate relay config." );
+		fatal( 0x0105, "Unable to validate relay config." );
 
 	// were we just testing config?
 	if( testConf )
@@ -151,41 +156,41 @@ int main( int ac, char **av )
 
 	// open our log file and get going
 	if( !ctl->log->force_stdout )
-		debug( 0x0105, "Starting logging - no more logs to stdout." );
+		debug( 0x0106, "Starting logging - no more logs to stdout." );
 
 	log_start( );
-	notice( 0x0106, "Coal starting up." );
+	notice( 0x0107, "Coal starting up." );
 
 	if( ctl->run_flags & RUN_DAEMON )
 	{
 		if( daemon( 1, 0 ) < 0 )
 		{
-			warn( 0x0107, "Unable to daemonize -- %s", Err );
+			warn( 0x0108, "Unable to daemonize -- %s", Err );
 			fprintf( stderr, "Unable to daemonize -- %s", Err );
 			ctl->run_flags &= ~RUN_DAEMON;
 		}
 		else
-			info( 0x0108, "Coal running in daemon mode, pid %d.", getpid( ) );
+			info( 0x0109, "Coal running in daemon mode, pid %d.", getpid( ) );
 	}
 
 	if( net_start( ) )
-		fatal( 0x0109, "Failed to start networking." );
+		fatal( 0x010a, "Failed to start networking." );
 
 	if( relay_start( ) )
-		fatal( 0x010a, "Failed to start relay connections." );
+		fatal( 0x010b, "Failed to start relay connections." );
 
 	if( set_signals( ) )
-		fatal( 0x010b, "Failed to set signalling." );
+		fatal( 0x010c, "Failed to set signalling." );
 
 	if( node_start_discovery( ) )
-		fatal( 0x010c, "Unable to begin looking for existing nodes." );
+		fatal( 0x010d, "Unable to begin looking for existing nodes." );
 
-	info( 0x010d, "Discovered %u branch and %u leaf nodes.",
+	info( 0x010e, "Discovered %u branch and %u leaf nodes.",
 		ctl->node->branches, ctl->node->leaves,
 		( ctl->node->node_id == 1 ) ? "" : "s" );
 
 	get_time( );
-	info( 0x010e, "Coal started up in %.3fs.",
+	info( 0x010f, "Coal started up in %.3fs.",
 		ctl->curr_time - ctl->start_time );
 
 	// run the loop forever

@@ -7,6 +7,8 @@
 #include <c3db.h>
 
 // here's what we need in addition
+#include <grp.h>
+#include <pwd.h>
 #include <poll.h>
 #include <netdb.h>
 #include <regex.h>
@@ -32,6 +34,7 @@
 #include "run.h"
 #include "utils.h"
 #include "log.h"
+#include "priv.h"
 #include "thread.h"
 
 // dependent - order matters

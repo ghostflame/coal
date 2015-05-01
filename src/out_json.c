@@ -1,6 +1,6 @@
 #include "coal.h"
 
-#define LLFID LLFJS
+#define LLFID LLFOJ
 
 
 int out_json_tree( NSOCK *s, QUERY *q )
