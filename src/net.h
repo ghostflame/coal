@@ -115,7 +115,8 @@ HOST *net_get_host( int sock, int type );
 void net_close_host( HOST *h );
 
 NSOCK *net_make_sock( int insz, int outsz, char *name, struct sockaddr_in *peer );
-int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog );
+int net_listen_sock( PORT_CTL *pc, int backlog );
+int net_port_sock( PORT_CTL *pc, uint32_t ip );
 void net_disconnect( int *sock, char *name );
 int net_connect( NSOCK *s );
 
@@ -126,6 +127,7 @@ int net_read_bin( HOST *h );
 int net_read_lines( HOST *h );
 
 // init/shutdown
+int net_bind( void );
 int net_start( void );
 void net_stop( void );
 

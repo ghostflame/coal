@@ -32,6 +32,8 @@ remove:
 clean:
 	@-for d in $(DIRS); do ( cd $$d && $(MAKE) $(MFLAGS) clean ); done
 	@rm -f logs/* core*
+	@rm -rf jail/
+	@mkdir jail
 	@echo -n "Removing nodes... "
 	@rm -rf nodes
 	@echo "done."

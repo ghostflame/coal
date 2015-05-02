@@ -22,7 +22,8 @@ typedef struct priv_control			PRIV_CTL;
 // other structures
 typedef struct config_context 		CCTXT;
 typedef struct data_point 			POINT;
-typedef struct log_file    			LOG_FILE;
+typedef struct log_file				LOG_FILE;
+typedef struct log_buffer			LOG_BUF;
 typedef struct query_data			QUERY;
 typedef struct net_buffer			NBUF;
 typedef struct net_socket			NSOCK;

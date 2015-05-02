@@ -11,7 +11,7 @@
 #define DEFAULT_LOG_RELAY	"logs/coal.relay.log"
 
 #define LOG_LINE_MAX		8192
-
+#define LOG_BUF_SZ			0x100000	// 1M
 
 enum log_levels
 {
@@ -33,12 +33,21 @@ enum log_destinations
 	LOG_DEST_MAX
 };
 
+struct log_buffer
+{
+	LOG_BUF			*	next;
+	char			*	buf;
+	int					size;
+	int					used;
+};
+
 
 struct log_file
 {
 	char			*	filename;
 	int					level;
 	int					fd;
+	LOG_BUF			*	buffer;
 };
 
 struct log_control
@@ -47,12 +56,15 @@ struct log_control
 	LOG_FILE			query;
 	LOG_FILE			node;
 	LOG_FILE			relay;
+	int					copy_stdout;
 	int					force_stdout;
 };
 
 
 // functions from log.c that we want to expose
 int log_line( int dest, int level, const char *file, const int line, const char *fn, unsigned int id, char *fmt, ... );
+void log_buffer( int on_off, LOG_FILE *which );
+void log_copy_stdout( int on_off );
 int log_close( void );
 void log_reopen( int sig );
 int log_start( void );

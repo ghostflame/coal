@@ -12,14 +12,54 @@ char *log_level_strings[LOG_LEVEL_MAX] =
 	"DEBUG"
 };
 
+// add a new buffer structure to the log line
+void __log_add_buffer( LOG_FILE *lf )
+{
+	LOG_BUF *b;
+
+	b       = (LOG_BUF *) allocz( sizeof( LOG_BUF ) );
+	b->size = LOG_BUF_SZ;
+	b->buf  = (char *) allocz( LOG_BUF_SZ );
+
+	b->next    = lf->buffer;
+	lf->buffer = b;
+}
+
+// recursively write the buffer queue
+void __log_flush_buffer( LOG_FILE *lf, LOG_BUF *buf )
+{
+	if( buf->next )
+		__log_flush_buffer( lf, buf->next );
+
+	write( lf->fd, buf->buf, buf->used );
+	free( buf->buf );
+	free( buf );
+}
+
+// copy a log line to the buffer, expanding it if necessary
+void __log_write_buffer( LOG_FILE *lf, char *line, int len )
+{
+	LOG_BUF *b = lf->buffer;
+
+	if( ( b->used + len ) > b->size )
+	{
+		__log_add_buffer( lf );
+		b = lf->buffer;
+	}
+
+	memcpy( b->buf + b->used, line, len );
+	b->used += len;
+}
+
+
 
 int log_get_level( char *str )
 {
-  	int i;
+	int i;
 
 	if( !str || !*str )
 	{
-	  	warn( 0x0101, "Empty/null log level string." );
+		warn( 0x0101, "Empty/null log level string." );
 		// clearly, you need the help
 		return LOG_LEVEL_DEBUG;
 	}
@@ -28,7 +68,7 @@ int log_get_level( char *str )
 	{
 		i = atoi( str );
 		if( i >= 0 && i < LOG_LEVEL_MAX )
-		  	return i;
+			return i;
 
 		warn( 0x0102, "Invalid log level string '%s'", str );
 		return LOG_LEVEL_DEBUG;
@@ -36,7 +76,7 @@ int log_get_level( char *str )
 
 	for( i = LOG_LEVEL_FATAL; i < LOG_LEVEL_MAX; i++ )
 		if( !strcasecmp( str, log_level_strings[i] ) )
-		  	return i;
+			return i;
 
 
 	warn( 0x0103, "Unrecognised log level string '%s'", str );
@@ -75,9 +115,9 @@ int log_write_ts( char *to, int len )
 int log_line( int dest, int level, const char *file, const int line,
 				const char *fn, unsigned int id, char *fmt, ... )
 {
-	int fd = 2, l = 0, tofile = 0;
-  	char buf[LOG_LINE_MAX];
+	char buf[LOG_LINE_MAX];
 	LOG_FILE *lf = NULL;
+	int fd = -1, l = 0;
 	va_list args;
 
 	// stderr if we aren't set up yet
@@ -105,19 +145,13 @@ int log_line( int dest, int level, const char *file, const int line,
 			return 0;
 
 		fd = lf->fd;
-		tofile = 1;
 	}
-
-	// can we write?
-	if( fd < 0 )
-		return -1;
 
 	// write the predictable parts
 	l  = log_write_ts( buf, LOG_LINE_MAX );
 
 	l += snprintf( buf + l, LOG_LINE_MAX - l, " [%08x] [%s] ",
 			id, log_level_strings[level] );
-
 
 	// fatals, errs and debugs get details
 	switch( level )
@@ -141,20 +175,21 @@ int log_line( int dest, int level, const char *file, const int line,
 		buf[l]   = '\0';
 	}
 
-
-	if( lf )
+	// are we still log buffering?
+	if( lf->buffer )
+		__log_write_buffer( lf, buf, l );
+	else if( fd > -1 )
 	{
 		// maybe always log to stdout?
-	  	if( ctl->log->force_stdout )
+		if( ctl->log->copy_stdout )
 			printf( "%s", buf );
 
 		// but write to log file
-		if( tofile > 0 )
-			l = write( fd, buf, l );
+		l = write( fd, buf, l );
 	}
 	else
-	  	// nowhere else to go...
-	  	l = printf( "%s", buf );
+		// nowhere else to go...
+		l = printf( "%s", buf );
 
 	// FATAL never returns
 	if( level == LOG_LEVEL_FATAL )
@@ -219,6 +254,40 @@ void log_reopen( int sig )
 }
 
 
+void log_buffer( int on_off, LOG_FILE *which )
+{
+	if( which == NULL )
+	{
+		log_buffer( on_off, &(ctl->log->main) );
+		log_buffer( on_off, &(ctl->log->node) );
+		log_buffer( on_off, &(ctl->log->query) );
+		log_buffer( on_off, &(ctl->log->relay) );
+		return;
+	}
+
+	if( on_off )
+	{
+		if( !which->buffer )
+			__log_add_buffer( which );
+		return;
+	}
+
+	// was buffering on already?
+	if( which->buffer )
+	{
+		// then we are flushing logs and ceasing buffering
+		__log_flush_buffer( which, which->buffer );
+		which->buffer = NULL;
+	}
+}
+
+// allow force stdout to override
+void log_copy_stdout( int on_off )
+{
+	ctl->log->copy_stdout = on_off + ctl->log->force_stdout;
+}
+
+
 
 int log_start( void )
 {
@@ -238,6 +307,9 @@ int log_start( void )
 
 	ret += __log_open( &(ctl->log->relay) );
 	rnotice( 0x0304, "Coal relay logging started." );
+
+	// and flush the logs
+	log_buffer( 0, NULL );
 
 	return ret;
 }
@@ -266,6 +338,7 @@ LOG_CTL *log_config_defaults( void )
 	l->relay.fd       = fileno( stderr );
 	
 	l->force_stdout   = 0;
+	l->copy_stdout    = 0;
 
 	return l;
 }

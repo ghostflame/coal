@@ -98,6 +98,10 @@ int main( int ac, char **av )
 	// make a control structure
 	ctl = create_config( );
 
+	// start buffering logs up
+	log_buffer( 1, NULL );
+
+	// process args
 	while( ( oc = getopt( ac, av, "hDvdtc:" ) ) != -1 )
 		switch( oc )
 		{
@@ -115,6 +119,9 @@ int main( int ac, char **av )
 				ctl->run_flags |= RUN_DEBUG;
 				break;
 			case 'v':
+				// repeated calls make it verbose
+				if( ctl->log->force_stdout )
+					log_copy_stdout( 1 );
 				ctl->log->force_stdout = 1;
 				break;
 			case 't':
@@ -136,14 +143,9 @@ int main( int ac, char **av )
 	if( priv_set_dirs( ) )
 		fatal( 0x0103, "Unable to set directory options.\n" );
 
-	// are we dropping privileges?
-	// has to happen *after* the chroot
-	if( priv_set_user( ) )
-		fatal( 0x0104, "Unable to change privileges." );
-
 	// match up relay rules against destinations
 	if( config_check_relay( ) )
-		fatal( 0x0105, "Unable to validate relay config." );
+		fatal( 0x0104, "Unable to validate relay config." );
 
 	// were we just testing config?
 	if( testConf )
@@ -152,45 +154,55 @@ int main( int ac, char **av )
 		return 0;
 	}
 
+	// we have to do this before dropping privs
+	// because we might be asked to run on low ports
+	if( net_bind( ) )
+		fatal( 0x0105, "Unable to bind network ports." );
+
 	pidfile_write( );
+
+	// are we dropping privileges?
+	if( priv_set_user( ) )
+		fatal( 0x0106, "Unable to change privileges." );
 
 	// open our log file and get going
 	if( !ctl->log->force_stdout )
-		debug( 0x0106, "Starting logging - no more logs to stdout." );
+		debug( 0x0107, "Starting logging - no more logs to stdout." );
 
+	// this has to be done with dropped privs
 	log_start( );
-	notice( 0x0107, "Coal starting up." );
+	notice( 0x0108, "Coal starting up." );
 
 	if( ctl->run_flags & RUN_DAEMON )
 	{
 		if( daemon( 1, 0 ) < 0 )
 		{
-			warn( 0x0108, "Unable to daemonize -- %s", Err );
+			warn( 0x0109, "Unable to daemonize -- %s", Err );
 			fprintf( stderr, "Unable to daemonize -- %s", Err );
 			ctl->run_flags &= ~RUN_DAEMON;
 		}
 		else
-			info( 0x0109, "Coal running in daemon mode, pid %d.", getpid( ) );
+			info( 0x010a, "Coal running in daemon mode, pid %d.", getpid( ) );
 	}
 
 	if( net_start( ) )
-		fatal( 0x010a, "Failed to start networking." );
+		fatal( 0x010b, "Failed to start networking." );
 
 	if( relay_start( ) )
-		fatal( 0x010b, "Failed to start relay connections." );
+		fatal( 0x010c, "Failed to start relay connections." );
 
 	if( set_signals( ) )
-		fatal( 0x010c, "Failed to set signalling." );
+		fatal( 0x010d, "Failed to set signalling." );
 
 	if( node_start_discovery( ) )
-		fatal( 0x010d, "Unable to begin looking for existing nodes." );
+		fatal( 0x010e, "Unable to begin looking for existing nodes." );
 
-	info( 0x010e, "Discovered %u branch and %u leaf nodes.",
+	info( 0x010f, "Discovered %u branch and %u leaf nodes.",
 		ctl->node->branches, ctl->node->leaves,
 		( ctl->node->node_id == 1 ) ? "" : "s" );
 
 	get_time( );
-	info( 0x010f, "Coal started up in %.3fs.",
+	info( 0x0110, "Coal started up in %.3fs.",
 		ctl->curr_time - ctl->start_time );
 
 	// run the loop forever

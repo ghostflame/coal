@@ -215,8 +215,25 @@ int net_connect( NSOCK *s )
 
 
 
+int net_listen_sock( PORT_CTL *pc, int backlog )
+{
+	if( !backlog )
+		backlog = 5;
 
-int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog )
+	if( listen( pc->sock, backlog ) < 0 )
+	{
+		err( 0x0e01, "Listen error for %s -- %s", pc->label, Err );
+		close( pc->sock );
+		return -1;
+	}
+
+	info( 0x0e02, "Listening on port %hu for %s", pc->port, pc->label );
+	return 0;
+}
+
+
+
+int net_port_sock( PORT_CTL *pc, uint32_t ip )
 {
 	struct sockaddr_in sa;
 	int s, so;
@@ -254,18 +271,6 @@ int net_port_sock( PORT_CTL *pc, uint32_t ip, int backlog )
 			close( s );
 			return -3;
 		}
-
-		if( !backlog )
-			backlog = 5;
-
-		if( listen( s, backlog ) < 0 )
-		{
-			err( 0x0604, "Listen error for %s -- %s", pc->label, Err );
-			close( s );
-			return -4;
-		}
-
-		info( 0x0605, "Listening on port %hu for %s", pc->port, pc->label );
 	}
 
 	return s;
@@ -333,7 +338,7 @@ int net_read_data( NSOCK *s )
 
 	if( s->keep.len )
 	{
-	  	// can we shift the kept string
+		// can we shift the kept string
 		if( ( s->keep.buf - s->in.buf ) >= s->keep.len )
 			memcpy( s->in.buf, s->keep.buf, s->keep.len );
 		else
@@ -358,7 +363,7 @@ int net_read_data( NSOCK *s )
 
 	if( !( i = recv( s->sock, s->in.buf + s->in.len, s->in.sz - ( s->in.len + 2 ), MSG_DONTWAIT ) ) )
 	{
-	  	// that would be the fin, then
+		// that would be the fin, then
 		s->flags |= HOST_CLOSE;
 		return 0;
 	}
@@ -537,6 +542,23 @@ int net_read_lines( HOST *h )
 }
 
 
+int net_listen_type( NET_TYPE_CTL *ntc )
+{
+	int d, q;
+
+	if( !ntc->enabled )
+		return 0;
+
+	if( ntc->data->sock )
+		d = net_listen_sock( ntc->data, 10 );
+
+	if( ntc->query->sock )
+		q = net_listen_sock( ntc->query, 10 );
+
+	return (d|q);
+}
+
+
 int net_start_type( NET_TYPE_CTL *ntc )
 {
 	int d, q;
@@ -544,10 +566,10 @@ int net_start_type( NET_TYPE_CTL *ntc )
 	if( !ntc->enabled )
 		return 0;
 
-	if( ( d = net_port_sock( ntc->data, 0, 10 ) ) < 0 )
+	if( ( d = net_port_sock( ntc->data, 0 ) ) < 0 )
 		return -1;
 
-	if( ( q = net_port_sock( ntc->query, 0, 10 ) ) < 0 )
+	if( ( q = net_port_sock( ntc->query, 0 ) ) < 0 )
 	{
 		close( d );
 		return -1;
@@ -562,6 +584,19 @@ int net_start_type( NET_TYPE_CTL *ntc )
 
 
 int net_start( void )
+{
+	int ret = 0;
+
+	notice( 0x0f01, "Starting network listening." );
+
+	ret += net_listen_type( ctl->net->line );
+	ret += net_listen_type( ctl->net->bin );
+
+	return ret;
+}
+
+
+int net_bind( void )
 {
 	int ret = 0, en = 0;
 
