@@ -16,6 +16,13 @@ qoutput_fn *query_output_function_pointers[QUERY_FMT_MAX][QUERY_TYPE_MAX] = {
 	{	&out_bin_data,		&out_bin_tree,		&out_bin_search		}
 };
 
+// used to access the invalid query functions
+qoutput_fn *query_invalid_function_pointers[QUERY_FMT_MAX] = {
+	&out_lines_invalid,
+	&out_json_invalid,
+	&out_bin_invalid
+};
+
 
 
 const char *query_type_names( int type )
@@ -104,6 +111,30 @@ int query_align_times( QUERY *q )
 }
 
 
+// respond back saying wtf?
+void query_error( QUERY *q, char *fmt, ... )
+{
+	va_list args;
+
+	// this may already be there
+	if( !q->errbuf )
+		q->errbuf = perm_str( QUERY_ERRBUF_SZ );
+
+	va_start( args, fmt );
+	vsnprintf( q->errbuf, QUERY_ERRBUF_SZ, fmt, args );
+	va_end( args );
+
+	// and point the error to it
+	q->error = q->errbuf;
+	q->type  = QUERY_TYPE_INVALID;
+
+	(*(query_invalid_function_pointers[q->format]))( q->host->net, q );
+
+	mem_free_query( &q );
+}
+
+
+
 // look up nodes for the query
 int query_find_node( QUERY *q )
 {
@@ -113,6 +144,7 @@ int query_find_node( QUERY *q )
 		if( regcomp( &(q->search), q->path->str, REG_EXTENDED|REG_ICASE|REG_NOSUB ) )
 		{
 			qwarn( 0x0501, "Invalid query search expression: '%s'", q->path->str );
+			query_error( q, "Invalid search expression: %s", q->path->str );
 			return -1;
 		}
 
@@ -124,11 +156,14 @@ int query_find_node( QUERY *q )
 	if( !( q->node = node_find( q->path ) ) )
 	{
 		qinfo( 0x0502, "Query for unknown node: '%s'", q->path->str );
+		query_error( q, "Node not found: %s", q->path->str );
 		return -1;
 	}
 
 	return 0;
 }
+
+
 
 
 
@@ -164,17 +199,13 @@ QUERY *query_bin_read( HOST *h )
 			}
 			if( qtype <= QUERY_TYPE_INVALID
 			 || qtype >= QUERY_TYPE_MAX )
-			{
 				qwarn( 0x0602, "Received query type %d from host %s on query bin connection.",
 					qtype, h->net->name );
-				// never mind
-				continue;
-			}
 
 			q         = mem_new_query( );
 			q->format = QUERY_FMT_BIN;
 			q->type   = qtype;
-
+			q->host   = h;
 
 			if( q->type == QUERY_TYPE_DATA )
 			{
@@ -186,19 +217,20 @@ QUERY *query_bin_read( HOST *h )
 				{
 					qwarn( 0x0603, "Invalid metric %d in query from host %s",
 						q->rtype, h->net->name );
-					mem_free_query( &q );
+					query_error( q, "Unrecogised query metric %d", q->rtype );
 					continue;
 				}
 
 				if( query_align_times( q ) < 0 )
 				{
 					qwarn( 0x0604, "End < start in query from host %s", h->net->name );
-					mem_free_query( &q );
+					query_error( q, "End < start in query times" );
 					continue;
 				}
 			}
 
 			q->path = mem_new_path( (char *) ( buf + 14 ), len - 15 );
+
 			q->next = list;
 			list    = q;
 		}
@@ -231,21 +263,20 @@ QUERY *query_line_read( HOST *h )
 			 || ( fmt = query_format_type( h->val->wd[QUERY_FIELD_FORMAT] ) ) )
 			{
 				qinfo( 0x0702, "Invalid line from query host %s", h->net->name );
+				h->net->flags |= HOST_CLOSE;
 				continue;
 			}
 
 			// create a new with some defaults
 			q         = mem_new_query( );
+			q->id     = strtoul( h->val->wd[QUERY_FIELD_ID], NULL, 10 ) & 0xff; // limited to 8 bits
 			q->type   = (int8_t) type;
 			q->format = (int8_t) fmt;
+			q->path   = mem_new_path( h->val->wd[QUERY_FIELD_PATH], h->val->len[QUERY_FIELD_PATH] );
+			q->host   = h;
 
-			if( type == QUERY_TYPE_TREE )
+			if( type == QUERY_TYPE_DATA )
 			{
-				q->path = mem_new_path( h->val->wd[QUERY_FIELD_PATH], h->val->len[QUERY_FIELD_PATH] );
-			}
-			else if( type == QUERY_TYPE_DATA )
-			{
-				q->path   = mem_new_path( h->val->wd[QUERY_FIELD_PATH], h->val->len[QUERY_FIELD_PATH] );
 				// read in the timestamp fields and type
 				q->end    = (time_t) strtoul( h->val->wd[QUERY_FIELD_END], NULL, 10 );
 				q->start  = (time_t) strtoul( h->val->wd[QUERY_FIELD_START], NULL, 10 );
@@ -255,7 +286,7 @@ QUERY *query_line_read( HOST *h )
 				if( query_align_times( q ) < 0 )
 				{
 					qwarn( 0x0703, "End < start in query from host %s", h->net->name );
-					mem_free_query( &q );
+					query_error( q, "End < start in query times" );
 					continue;
 				}
 			}
@@ -265,7 +296,7 @@ QUERY *query_line_read( HOST *h )
 			{
 				qwarn( 0x0704, "Asked for binary format query answer on a line format connection from host %s",
 					h->net->name );
-				mem_free_query( &q );
+				query_error( q, "Binary format not permitted on line connections" );
 				continue;
 			}
 
@@ -321,17 +352,25 @@ void query_handle_connection( HOST *h )
 
 			qdebug( 0x0902, "Found a query to handle." );
 
+			// count up
+			h->queries++;
+
+			// autogen id
+			if( !q->id )
+				q->id = h->queries & 0xff;
+
 			// look up the node
+			// this does it's own error calls
 			if( query_find_node( q ) != 0 )
-			{
-				mem_free_query( &q );
 				continue;
-			}
 
 			switch( q->type )
 			{
 				case QUERY_TYPE_DATA:
 					search_data( q );
+					// set the rcount
+					if( q->results )
+						q->rcount = q->results->count;
 					break;
 				case QUERY_TYPE_TREE:
 					search_tree( q );
@@ -367,6 +406,9 @@ void *query_connection( void *arg )
 	pthread_setcanceltype( PTHREAD_CANCEL_ASYNCHRONOUS, NULL );
 
 	query_handle_connection( h );
+
+	qinfo( 0x0a02, "Closing query connection from host %s after %lu queries.",
+			h->net->name, h->queries );
 
 	net_close_host( h );
 

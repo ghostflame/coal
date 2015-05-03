@@ -164,4 +164,12 @@ var      0-3      Padding for 4-byte alignment
 
 
 
-
+Output (invalid query):
+Offset   Size     Field
+0        1        Version
+1        1        Type
+2        1        Query type (query type invalid)
+3        1        Query id
+4        4        Record size (ie size - 8 more bytes to read)
+8        var      Error message + \0
+var      0-3      Padding for 4-byte alignment

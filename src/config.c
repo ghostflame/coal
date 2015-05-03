@@ -160,7 +160,7 @@ char *config_relative_path( char *inpath )
 		return strdup( inpath );
 
 	if( !ctl->priv->basedir )
-	  	// just step over it
+		// just step over it
 		return strdup( inpath + 1 );
 
 	// add 1 for the /, remove 1 for the ~, add 1 for the \0

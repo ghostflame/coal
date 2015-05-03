@@ -111,7 +111,7 @@ int priv_config_line( AVP *av )
 	if( attIs( "basedir" ) )
 	{
 		free( ctl->priv->basedir );
-		ctl->priv->basedir = strdup( av->val );
+		ctl->priv->basedir = str_copy( av->val, av->vlen );
 	}
 	else if( attIs( "chroot" ) )
 	{
@@ -124,13 +124,13 @@ int priv_config_line( AVP *av )
 	{
 		if( ctl->priv->user )
 			free( ctl->priv->user );
-		ctl->priv->user = strdup( av->val );
+		ctl->priv->user = str_copy( av->val, av->vlen );
 	}
 	else if( attIs( "group" ) )
 	{
 		if( ctl->priv->group )
 			free( ctl->priv->group );
-		ctl->priv->group = strdup( av->val );
+		ctl->priv->group = str_copy( av->val, av->vlen );
 	}
 	else
 		return -1;
