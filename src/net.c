@@ -91,8 +91,8 @@ HOST *net_get_host( int sock, int type )
 	struct sockaddr_in from;
 	socklen_t sz;
 	char buf[32];
+	int d, l;
 	HOST *h;
-	int d;
 
 	sz = sizeof( from );
 	if( ( d = accept( sock, (struct sockaddr *) &from, &sz ) ) < 0 )
@@ -102,13 +102,13 @@ HOST *net_get_host( int sock, int type )
 		return NULL;
 	}
 
-	snprintf( buf, 32, "%s:%hu", inet_ntoa( from.sin_addr ),
+	l = snprintf( buf, 32, "%s:%hu", inet_ntoa( from.sin_addr ),
 		ntohs( from.sin_port ) );
 
 	h            = mem_new_host( );
 	h->type      = type;
 	h->peer      = from;
-	h->net->name = strdup( buf );
+	h->net->name = str_copy( buf, l );
 	h->net->sock = d;
 	// should be a unique timestamp
 	h->started   = timedbl( NULL );
@@ -640,7 +640,7 @@ NET_CTL *net_config_defaults( void )
 	net->bin->type          = NET_COMM_BIN;
 	net->bin->enabled       = DEFAULT_NET_BIN_ENABLED;
 
-	net->dead_time			= NET_DEAD_CONN_TIMER;
+	net->dead_time          = NET_DEAD_CONN_TIMER;
 
 	return net;
 }
@@ -648,7 +648,7 @@ NET_CTL *net_config_defaults( void )
 
 int net_config_line( AVP *av )
 {
-  	NET_TYPE_CTL *ntc = NULL;
+	NET_TYPE_CTL *ntc = NULL;
 	PORT_CTL *pc = NULL;
 	char *d, *p;
 
@@ -703,7 +703,7 @@ int net_config_line( AVP *av )
 	else if( !strcasecmp( d, "label" ) )
 	{
 		free( pc->label );
-		pc->label = strdup( av->val );
+		pc->label = str_copy( av->val, av->vlen );
 	}
 	else
 		return -1;

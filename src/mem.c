@@ -351,6 +351,7 @@ void mem_free_query( QUERY **q )
 {
 	QUERY *sq;
 	C3RES *rs;
+	char *eb;
 	int i;
 
 	if( !q || !*q )
@@ -375,7 +376,10 @@ void mem_free_query( QUERY **q )
 	if( sq->path )
 		mem_free_path( &(sq->path) );
 
+	// keep the error buffer and zero the rest
+	eb = sq->errbuf;
 	memset( sq, 0, sizeof( QUERY ) );
+	sq->errbuf = eb;
 
 	pthread_mutex_lock( &(ctl->locks->query) );
 

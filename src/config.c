@@ -148,7 +148,7 @@ int config_line( AVP *av )
 	else if( attIs( "basedir" ) )
 	{
 		free( ctl->basedir );
-		ctl->basedir = strdup( av->val );
+		ctl->basedir = str_copy( av->val, av->vlen );
 	}
 	return 0;
 }
@@ -164,7 +164,7 @@ char *config_relative_path( char *inpath )
 		return strdup( inpath );
 
 	if( !ctl->basedir )
-	  	// just step over it
+		// just step over it
 		return strdup( inpath + 1 );
 
 	// add 1 for the /, remove 1 for the ~, add 1 for the \0

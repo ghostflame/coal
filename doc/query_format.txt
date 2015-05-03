@@ -3,11 +3,12 @@ Query Format
 
 Order Field     Type       Default
 1     Type      String     data, taken from [ data, search, tree ]
-2     Format    String     fields - taken from [ fields, json ]
-3     Path      String     None - required
-4     Start     Timestamp  Now-24hrs.  Only valid in a 'data'
-5     End       Timestamp  Current Time.  Only valid in a 'data' type
-6     Metric    String     mean - taken from [ mean, min, max, count, sum, spread ]
+2     ID        Integer    Query ID - optional, autogen'd if absent
+3     Format    String     fields - taken from [ fields, json ]
+4     Path      String     None - required
+5     Start     Timestamp  Now-24hrs.  Only valid in a 'data'
+6     End       Timestamp  Current Time.  Only valid in a 'data' type
+7     Metric    String     mean - taken from [ mean, min, max, count, sum, spread ]
 
 
 In line format, these are presented separated by a space ' ' and terminated
@@ -29,24 +30,24 @@ Line format:
 
 
 The return of a data query is:
-
-<path> <from> <to> <metric> <period> <type> <result count>\n
+data <id> <from> <to> <period> <metric> 1 <result count> <path>\n
 [<timestamp>,<value>|"null"]\n
 [<timestamp>,<value>|"null"]\n
 ...
 
 Until all results are sent.
+
 
 The return of a search query is:
-<string> 0 0 "search" 0 1 <result count>\n
+search <id> 0 0 0 none 0 <result count> <search string>\n
 <path>\n
 <path>\n
 ...
 Until all results are sent.
 
-The return of a tree query is:
 
-<path> 0 0 "tree" 0 <type> <result count>\n
+The return of a tree query is:
+tree <id> 0 0 0 none <node type> <result count> <path>\n
 "leaf"|"branch",<path>\n
 "leaf"|"branch",<path>\n
 ...
@@ -60,46 +61,83 @@ node.
 
 Json format:
 
-The return of a data query is:
+All of the returned formats have some fields in common
 {
-	"path":     <path>,
-	"start":    <start>,
-	"end":      <end>,
-	"metric":   <metric>,
-	"period":   <period>,
-	"count":    <result count>,
-    "values":	[
-		[<timestamp>,<value>|"null"],
-		[<timestamp>,<value>|"null"],
-		...
-	]
+    "header":
+    {
+        "type":     <query type>,
+        "id":       <query id>,
+        "count":    <result count>,
+    },
+}
+
+Invalid queries return as:
+{
+    "header":
+    {
+        "type":     <query type>,
+        "id":       <query id>,
+        "count":    0,
+    },
+    "error":        <query error message>
 }
 
 
-The return of a search query is:
+Data queries return as:
 {
-    "regex":    <string>,
-    "type":     "leaf",
-    "count":    <result count>,
-    "paths":    p
-        <path>,
-        <path>,
+    "header":
+    {
+        "type":     "data",
+        "id":       <query id>,
+        "start":    <query start ts>,
+        "end":      <query end ts>,
+        "period":   <query data period sec>,
+        "metric":   <query metric name>,
+        "path":     <query path>,
+        "count":    <result count>,
+    },
+    "values":
+    [
+        [<timestamp>,<value>|"null"],
+        [<timestamp>,<value>|"null"],
+        ...
     ]
 }
 
 
-There return of a tree query is:
-
+Search queries return as:
 {
-	"path":     <path>,
-	"type":		["leaf"|"branch"],
-	"count":    <result count>,
-	"nodes":    [
-		["leaf"|"branch",<name>],
-		["leaf"|"branch",<name>],
-		...
-	]
+    "header":
+    {
+        "type":     "data",
+        "id":       <query id>,
+        "search":   <query search string>,
+        "count":    <result count>,
+    },
+    "paths":
+    [
+        <path>,
+        <path>,
+        ...
+    ]
 }
 
+Tree queries return as:
+{
+    "header":
+    {
+        "type":     "tree",
+        "id":       <query id>,
+        "leaf:      <queried node is leaf? 0|1>,
+        "path":     <query path>,
+        "count":    <result count>,
+    },
+    "nodes":
+    [
+        [<node is leaf? 0|1>,<node name>],
+        [<node is leaf? 0|1>,<node name>],
+        ...
+    ]
+}
 
 

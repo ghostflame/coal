@@ -12,7 +12,7 @@
 
 #define POLL_EVENTS						(POLLIN|POLLPRI|POLLRDNORM|POLLRDBAND|POLLHUP)
 
-#define COAL_NETBUF_SZ					0x1000	// 64k
+#define COAL_NETBUF_SZ					0x10000	// 64k
 
 #define HOST_CLOSE						0x01
 #define HOST_NEW						0x02
@@ -94,14 +94,15 @@ struct host_data
 
 	struct sockaddr_in		peer;
 
-	double					started;// accept time
-	double					last;	// last communication
+	double					started;	// accept time
+	double					last;		// last communication
 
-	int						type;	// line or bin
-	unsigned long			points;	// counter
+	int						type;		// line or bin
+	unsigned long			points;		// counter
+	unsigned long			queries;	// counter
 
-	WORDS				*	all;	// each line
-	WORDS				*	val;	// per line
+	WORDS				*	all;		// each line
+	WORDS				*	val;		// per line
 
 	query_read_fn		*	qrf;
 	data_read_fn		*	drf;

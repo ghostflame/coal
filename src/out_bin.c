@@ -163,7 +163,6 @@ int out_bin_tree( NSOCK *s, QUERY *q )
 }
 
 
-
 // write out the data response
 int out_bin_data( NSOCK *s, QUERY *q )
 {
@@ -235,7 +234,9 @@ int out_bin_data( NSOCK *s, QUERY *q )
 	memcpy( uc, q->path->str, q->path->len + 1 );
 
 	// step over and write some empty space
-	uc += q->path->len + 1;
+	uc += q->path->len;
+	*uc++ = '\0';
+
 	s->out.len = uc - s->out.buf;
 	while( s->out.len % 4 )
 	{
@@ -247,6 +248,36 @@ int out_bin_data( NSOCK *s, QUERY *q )
 
 	return 0;
 }
+
+
+// write out a bad-query response
+int out_bin_invalid( NSOCK *s, QUERY *q )
+{
+	uint32_t sz;
+	uint8_t *uc;
+	int l;
+
+	l = strlen( q->error );
+
+	sz = 9 + l;
+
+	out_bin_write_header( s, q, sz );
+
+	uc    = s->out.buf + 8;
+	memcpy( uc, q->error, l );
+	uc   += l;
+	*uc++ = '\0';
+
+	s->out.len = uc - s->out.buf;
+	while( s->out.len % 4 )
+	{
+		*uc++ = '\0';
+		s->out.len++;
+	}
+
+	return 0;
+}
+
 
 #undef LLFID
 

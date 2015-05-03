@@ -2,42 +2,67 @@
 
 #define LLFID LLFJS
 
+// yes, we hand-roll our JSON.  Why, how did you *think* we were going to do it?
+
+
+
+
+
+int out_json_header( char *buf, QUERY *q, int period, int leaf, char *metric, char *pkey )
+{
+	int l, sz;
+
+	l  = 4096;
+	sz = 0;
+	
+	sz += snprintf( buf, l, "\"header\":{\"type\":\"%s\",",
+	                query_type_get_name( q ) );
+
+	if( q->start )
+		sz += snprintf( buf + sz, l - sz, "\"start\":%u,", (uint32_t) q->start );
+	if( q->end )
+		sz += snprintf( buf + sz, l - sz, "\"end\":%u,", (uint32_t) q->end );
+	if( period )
+		sz += snprintf( buf + sz, l - sz, "\"period\":%d,", period );
+	if( metric )
+		sz += snprintf( buf + sz, l - sz, "\"metric\":\"%s\",", metric );
+	if( leaf > -1 )
+		sz += snprintf( buf + sz, l - sz, "\"leaf\":%d,", leaf );
+	if( pkey )
+		sz += snprintf( buf + sz, l - sz, "\"%s\":\"%s\",", pkey, q->path->str );
+
+	sz += snprintf( buf + sz, l - sz, "\"count\":%d},", q->rcount );
+
+	return sz;
+}
+
 
 int out_json_tree( NSOCK *s, QUERY *q )
 {
-	char *to;
-	int i;
+	char *to, *buf, *hwmk;
 	NODE *n;
+	int i;
 
+	hwmk = (char *) s->out.hwmk;
+	buf  = (char *) s->out.buf;
+	to   = buf + out_json_header( buf, q, 0, node_leaf_int( q->node ), NULL, "path" );
 
-	to  = (char *) s->out.buf;
-	to += snprintf( to, 1044,
-		"{\"path\":\"%s\",\"type\":\"%s\",\"count\":%d,\"nodes\":[",
-		q->path->str,
-		node_leaf_str( q->node ),
-		q->rcount );
+	to   += snprintf( to, 256, "\"nodes\":[" );
 
 	for( i = 0; i < q->rcount; i++ )
 	{
-		n = q->nodes[i];
+		n   = q->nodes[i];
+		to += snprintf( to, 1024, "%s[%d,%s]", ( i ) ? "," : "",
+		                node_leaf_int( n ), n->name );
 
-		to += snprintf( to, 1024, "%s[%s,%s]",
-			( i ) ? "," : "",
-			( n->flags & NODE_FLAG_LEAF ) ? "leaf" : "branch",
-			n->name );
-
-		if( to > (char *) s->out.hwmk )
-		{
-			s->out.len = to - (char *) s->out.buf;
-			net_write_data( s );
-			to = (char *) s->out.buf;
-		}
+		buf_check( to, hwmk );
 	}
 
 	// add closing braces
 	to += snprintf( to, 4, "]}\n" );
-	s->out.len = to - (char *) s->out.buf;
-	net_write_data( s );
+
+	// this will always happen
+	buf_check( to, buf );
 
 	return 0;
 }
@@ -46,21 +71,23 @@ int out_json_tree( NSOCK *s, QUERY *q )
 
 int out_json_data( NSOCK *s, QUERY *q )
 {
+	char *to, *buf, *hwmk;
 	uint32_t t;
 	int start;
-	char *to;
 	C3PNT *p;
+	C3RES *r;
 
-	to  = (char *) s->out.buf;
-	to += snprintf( to, 1096,
-		"{\"path\":\"%s\",\"start\":%ld,\"end\":%ld,\"count\":%d,\"period\":%d,\"metric\":\"%s\",\"values\":[",
-		q->path->str, q->start, q->end, q->results->count, q->results->period,
-		c3db_metric_name( q->rtype ) );
+	r = q->results;
+	p = r->points;
+	t = q->start - ( q->start % r->period );
 
-	p = q->results->points;
-	t = q->start - ( q->start % q->results->period );
+	hwmk = (char *) s->out.hwmk;
+	buf  = (char *) s->out.buf;
+	to   = buf + out_json_header( buf, q, r->period, -1, c3db_metric_name( q->rtype ), "path" );
 
-	for( ; t < q->end; t += q->results->period, p++ )
+	to  += snprintf( to, 256, "\"values\":[" );
+
+	for( ; t < q->end; t += r->period, p++ )
 	{
 		if( p->ts == t )
 			to += snprintf( to, 64, "%s[%u,%6f]",
@@ -71,18 +98,13 @@ int out_json_data( NSOCK *s, QUERY *q )
 
 		start = 0;
 
-		if( to > (char *) s->out.hwmk )
-		{
-			s->out.len = to - (char *) s->out.buf;
-			net_write_data( s );
-			to = (char *) s->out.buf;
-		}
+		buf_check( to, hwmk );
 	}
 
 	// add closing braces
 	to += snprintf( to, 4, "]}\n" );
-	s->out.len = to - (char *) s->out.buf;
-	net_write_data( s );
+
+	buf_check( to, buf );
 
 	return 0;
 }
@@ -90,6 +112,42 @@ int out_json_data( NSOCK *s, QUERY *q )
 
 int out_json_search( NSOCK *s, QUERY *q )
 {
+	char *to, *buf, *hwmk;
+	int i;
+
+	hwmk = (char *) s->out.hwmk;
+	buf  = (char *) s->out.buf;
+	to   = buf + out_json_header( buf, q, 0, -1, NULL, "search" );
+
+	to  += snprintf( to, 256, "\"paths\":[" );
+
+	for( i = 0; i < q->rcount; i++ )
+	{
+		to += snprintf( to, 1024, "%s%s", ( i ) ? "," : "", q->nodes[i]->dir_path );
+
+		buf_check( to, hwmk );
+	}
+
+	// add closing braces
+	to += snprintf( to, 4, "]}\n" );
+
+	buf_check( to, buf );
+
+	return 0;
+}
+
+
+int out_json_invalid( NSOCK *s, QUERY *q )
+{
+	char *to, *buf;
+
+	buf = (char *) s->out.buf;
+	to  = buf + out_json_header( buf, q, 0, -1, NULL, NULL );
+
+	to += snprintf( to, 4120, "\"error\":\"%s\"}\n", q->error );
+
+	buf_check( to, buf );
+
 	return 0;
 }
 

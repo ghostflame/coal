@@ -2,9 +2,14 @@
 #define COAL_QUERY_H
 
 
+#define QUERY_DEFAULT_ERROR		"Unknown problem - really, how broken was your request to do that?"
+#define QUERY_ERRBUF_SZ			4096
+
+
 enum query_line_fields
 {
 	QUERY_FIELD_TYPE = 0,
+	QUERY_FIELD_ID,
 	QUERY_FIELD_FORMAT,
 	QUERY_FIELD_PATH,
 	QUERY_FIELD_START,
@@ -23,18 +28,25 @@ enum query_formats
 	QUERY_FMT_MAX
 };
 
+// make these names available
+extern const char *query_type_name_strings[QUERY_TYPE_MAX];
+
+#define query_type_get_name( q )	( ( q->type < QUERY_TYPE_MAX && q->type > QUERY_TYPE_INVALID ) ? query_type_name_strings[q->type] : "invalid" )
 
 
 struct query_data
 {
 	QUERY           *   next;
+	HOST            *   host;
 	PATH            *   path;
 	NODE            *   node;
 	C3RES           *   results;
 	NODE            **  nodes;
+	char            *   error;
+	char            *   errbuf;
 
-	uint8_t             type;
-	uint8_t             format;
+	int8_t              type;
+	int8_t              format;
 	uint8_t             rtype;
 	uint8_t             id;
 	uint32_t            rcount;
