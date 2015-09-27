@@ -226,6 +226,10 @@ NODE *node_find( PATH *p )
 		return NULL;
 	}
 
+	// special name for the root
+	if( p->len == 1 && *(p->str) == '.' )
+		return ctl->node->nodes;
+
 	// look in the cache
 	if( ( pc = node_find_pcache( p ) ) )
 	{
@@ -238,10 +242,6 @@ NODE *node_find( PATH *p )
 	if( p->w->wc <= 0
 	 && node_path_parse( p ) <= 0 )
 		return NULL;
-
-	// special name for the root
-	if( p->len == 1 && *(p->str) == '.' )
-		return ctl->node->nodes;
 
 	// recurse down the tree
 	return __node_find( p, 0, ctl->node->nodes );

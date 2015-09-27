@@ -8,6 +8,7 @@ char *data_bin_type_names( int type )
 	switch( type )
 	{
 		case BINF_TYPE_DATA:
+		case BINF_TYPE_DATA_MULTI:
 			return "data";
 		case BINF_TYPE_QUERY:
 			return "query";
@@ -174,12 +175,28 @@ void data_pong( HOST *h, void *buf, int len )
 }
 
 
+void data_point_to_list( POINT **lp, uint32_t *data, char *path, int len )
+{
+	POINT *p;
+
+	p           = mem_new_point( );
+	p->data.ts  = *((time_t *)  data );
+	p->data.val = *((float *) ( data + 1 ) );
+	p->path     = mem_new_path( path, len );
+
+	p->next = *lp;
+	*lp     = p;
+}
+
 
 //fnid 3
 POINT *data_bin_read( HOST *h )
 {
-	int i, len, type;
-	POINT *list, *p;
+	uint16_t pathct, *pathlens, *sp;
+	uint32_t pntct, *pntcts, *up;
+	int i, j, k, len, dtype;
+	char *pathptr;
+	POINT *list;
 	void *buf;
 
 	list = NULL;
@@ -192,30 +209,76 @@ POINT *data_bin_read( HOST *h )
 			len  = h->all->len[i];
 
 			// read the type
-			type = (int) *((uint8_t *) (buf + 1));
+			dtype = (int) *((uint8_t *) (buf + 1));
 
 			// just respond to pings
-			if( type == BINF_TYPE_PING )
+			if( dtype == BINF_TYPE_PING )
 			{
 				data_pong( h, buf, len );
 				continue;
 			}
 
-			if( type != BINF_TYPE_DATA )
+			up      = (uint32_t *) buf + 4;
+			pathptr = (char *) ( buf + 12 );
+
+			if( dtype == BINF_TYPE_DATA )
+			{
+				data_point_to_list( &list, up, pathptr, len - 13 );
+				continue;
+			}
+
+			if( dtype != BINF_TYPE_DATA_MULTI )
 			{
 				warn( 0x0301, "Received type %d/%s from host %s on data bin connection.",
-					type, data_bin_type_names( type ), h->net->name );
+					dtype, data_bin_type_names( dtype ), h->net->name );
 				h->net->flags |= HOST_CLOSE;
 				return NULL;
 			}
 
-			p           = mem_new_point( );
-			p->data.ts  = *((time_t *) ( buf + 4 ));
-			p->data.val = *((float *)  ( buf + 8 ));
-			p->path     = mem_new_path( (char *) ( buf + 12 ), len - 13 );
+			// get the path count
+			pathct = *((uint16_t *) ( buf + 4 ));
+			if( pathct > 64 )
+			{
+				warn( 0x0302, "Received %hu paths in data-multi packet from host %s",
+					pathct, h->net->name );
+				h->net->flags |= HOST_CLOSE;
+				return NULL;
+			}
 
-			p->next = list;
-			list    = p;
+			// figure out the point count and path lengths
+			pathlens = (uint16_t *) allocz( pathct * sizeof( uint16_t ) );
+			pntcts   = (uint32_t *) allocz( pathct * sizeof( uint16_t ) );
+			sp       = (uint16_t *) ( buf + 8 );
+
+			// walk along picking up the lengths
+			for( pntct = 0, j = 0; j < pathct; j++ )
+			{
+				pntcts[j]   = *sp++;
+				pathlens[j] = *sp++;
+				pntct      += pntcts[j];
+			}
+
+			// now we've reach the data points
+			up = (uint32_t *) sp;
+
+			// step over the points to get to the paths
+			pathptr = (char *) ( up + pntct + pntct );
+
+			// step across making points, reusing the path ptr
+			for( j = 0; j < pathct; j++ )
+			{
+				for( k = 0; k < pntcts[j]; k++ )
+				{
+					data_point_to_list( &list, up, pathptr, pathlens[j] );
+					up++;
+					up++;
+				}
+				pathptr += pathlens[j] + 1;
+			}
+
+			// tidy up
+			free( pathlens );
+			free( pntcts );
 		}
 
 	return list;

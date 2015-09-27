@@ -1,5 +1,6 @@
 #include "local.h"
 
+
 const char *__libcoal_query_type_names[QUERY_TYPE_MAX] = {
 	"data",
 	"search",

@@ -67,6 +67,34 @@ None
 
 
 
+Binary Multi-Data Format
+========================
+
+Input:
+
+Offset	Size	Field
+0		1		Version
+1       1       Type
+2       2       Record size (ie size - 4 more bytes to read)
+4       2       Path count (which we will call N)
+6       2       Padding
+<i in 0 to N-1>
+8+4i    2       Point count (which we will call M each time)
+10+4i   2       Path length
+<i in 0 to N-1 * j in 0 to M-1>
+X       4       (time_t) timestamp
+X+4     4       (float) value
+<i in 0 to N-1>
+Y       var     Path (length capped at 1024)
+var     0-3     Padding for 4-byte alignment
+
+
+Output:
+
+None
+
+
+
 Binary Query Format
 ===================
 

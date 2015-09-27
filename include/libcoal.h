@@ -23,6 +23,7 @@
 #define BINF_TYPE_PING					0x02
 #define BINF_TYPE_PONG					(BINF_TYPE_PING|BINF_TYPE_REPLY)
 #define BINF_TYPE_DATA					0x04
+#define BINF_TYPE_DATA_MULTI			0x06
 #define BINF_TYPE_QUERY					0x08
 #define BINF_TYPE_QUERY_RET				(BINF_TYPE_QUERY|BINF_TYPE_REPLY)
 
@@ -69,6 +70,7 @@ enum libcoal_errors
 	LCE_NO_QRY,
 	LCE_EXISTING_QRY,
 	LCE_RECV_ERROR,
+	LCE_TIMEOUT,
 	LCE_BAD_QANS,
 	LCE_MAX
 };
@@ -172,5 +174,8 @@ int libcoal_prepare_data_query( COALH *h, COALQRY **qp, char *path, int len, tim
 int libcoal_prepare_tree_query( COALH *h, COALQRY **qp, char *path, int len );
 int libcoal_query( COALH *h, COALQRY *q, int wait );
 void libcoal_clean_tree( COALTREE **top );
+
+// utils.c
+double libcoal_tmdbl( double *td );
 
 #endif

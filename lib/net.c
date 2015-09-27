@@ -162,3 +162,48 @@ int libcoal_net_read( COALH *h, COALCONN *c )
 }
 
 
+// read until timeout
+int libcoal_net_read_query_answer( COALH *h, COALCONN *c, double tmout )
+{
+	uint32_t rlen, qlen;
+	double start, curr;
+
+	libcoal_tmdbl( &start );
+	curr = start;
+
+	while( c->inlen < 8 )
+	{
+		libcoal_net_read( h, c );
+		usleep( 10000 );
+
+		libcoal_tmdbl( &curr );
+		if( ( curr - start ) > tmout ) {
+			herr( TIMEOUT, "Timed out waiting for query answer." );
+			return -1;
+		}
+	}
+
+	// get the length
+	qlen = *((uint32_t *) (c->inbuf + 4));
+
+	// add the padding
+	rlen = qlen + ( ( 4 - ( qlen % 4 ) ) % 4 );
+
+	while( c->inlen < rlen )
+	{
+		libcoal_net_read( h, c );
+		usleep( 2000 );
+
+		libcoal_tmdbl( &curr );
+		if( ( curr - start ) > tmout )
+		{
+			herr( TIMEOUT, "Timed out waiting for complete query answer." );
+			return -2;
+		}
+	}
+
+	return 0;
+}
+
+
+

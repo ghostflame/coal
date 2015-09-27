@@ -151,7 +151,6 @@ int query_find_node( QUERY *q )
 		return 0;
 	}
 
-
 	// fine, we go looking the hard way
 	if( !( q->node = node_find( q->path ) ) )
 	{

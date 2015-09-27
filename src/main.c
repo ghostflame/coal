@@ -147,8 +147,6 @@ int main( int ac, char **av )
 		return 0;
 	}
 
-	pidfile_write( );
-
 	// open our log file and get going
 	if( !ctl->log->force_stdout )
 		debug( 0x0105, "Starting logging - no more logs to stdout." );
@@ -167,6 +165,8 @@ int main( int ac, char **av )
 		else
 			info( 0x0108, "Coal running in daemon mode, pid %d.", getpid( ) );
 	}
+
+	pidfile_write( );
 
 	if( net_start( ) )
 		fatal( 0x0109, "Failed to start networking." );
